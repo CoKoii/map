@@ -37,8 +37,8 @@ const ICONS = {
 function Header() {
   return (
     <header className="map-title">
-      <div className="brand-lockup"><div className="brand-mark">城建<span>绿和</span></div><div className="brand-sub">共建更美好的昆山</div></div>
-      <div className="title-lockup"><h1>昆山市装修垃圾收运运行总览</h1><div className="title-rule"><span /><b>小程序预约 · 装修清运 · 全程可查</b><span /></div></div>
+      <div className="brand-lockup"><div className="brand-mark">城建<span>绿和</span></div><div className="brand-sub">共建更美好的昆山</div><div className="brand-hero"><div className="brand-hero-title"><span>收</span><span>运</span></div><div className="brand-hero-sub">昆山 · 城市服务</div><div className="brand-hero-rule" /><div className="brand-hero-copy">让城市更整洁，让生活更美好</div></div></div>
+      <div className="title-lockup"><h1>昆山市装修垃圾收运<em>运行总览</em></h1><div className="title-rule"><span /><b>小程序预约　·　装修清运　·　全程可查</b><span /></div></div>
       <div className="top-meta"><strong>设计方案 · 演示数据</strong><div>精细管理　 高效收运　 洁净昆山</div></div>
     </header>
   );
@@ -99,7 +99,7 @@ function ExecutionPanel() {
 }
 
 function TrackingPanel() {
-  return <Panel title="清运任务追踪" meta="全流程可查 · 实时记录" icon={PackageCheck}>
+  return <Panel title="清运任务追踪" meta="全流程可查 · 实时记录" icon={PackageCheck} className="tracking-panel">
     <div className="tracking-meta"><span>示例任务　KS-0916-028</span><span>预约收集点 → 接收场所</span></div>
     <div className="tracking-steps">{TRACKING_STEPS.map((step, index) => <div className={`tracking-step ${index < 4 ? 'is-done' : ''}`} key={step}>
       <span>{index < 4 ? <CheckCircle2 size={22} /> : <i />}</span><b>{step}</b>

@@ -1,0 +1,22 @@
+{
+  "name": "kunshan-transport-dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "test": "node --test",
+    "data:kunshan": "node scripts/download-kunshan-data.mjs",
+    "data:amap": "node scripts/prepare-amap-data.mjs",
+    "build": "vite build",
+    "build:single": "vite build --mode single && node scripts/build-single-html.mjs",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.169.0",
+    "vite": "^5.4.14"
+  }
+}

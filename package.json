@@ -7,7 +7,8 @@
     "dev": "vite --host 0.0.0.0",
     "test": "node --test",
     "data:kunshan": "node scripts/download-kunshan-data.mjs",
-    "data:amap": "node scripts/prepare-amap-data.mjs",
+    "data:gcj02": "node scripts/prepare-gcj02-data.mjs",
+    "data:amap": "npm run data:gcj02",
     "build": "vite build",
     "build:single": "vite build --mode single && node scripts/build-single-html.mjs",
     "preview": "vite preview --host 0.0.0.0"

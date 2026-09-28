@@ -36,8 +36,8 @@ function createVehicleIcon(templateIcon) {
 function choosePair(places) {
   if (places.length < 2) return null;
   const originIndex = Math.floor(Math.random() * places.length);
-  let destinationIndex = Math.floor(Math.random() * places.length);
-  while (destinationIndex === originIndex) destinationIndex = Math.floor(Math.random() * places.length);
+  let destinationIndex = Math.floor(Math.random() * (places.length - 1));
+  if (destinationIndex >= originIndex) destinationIndex += 1;
   return [places[originIndex], places[destinationIndex]];
 }
 
@@ -46,7 +46,7 @@ function randomDelay() {
 }
 
 function animateProgress(from, to, duration, isStopped, update) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const startedAt = performance.now();
     let lastAppliedAt = -Infinity;
     const tick = (now) => {
@@ -54,14 +54,18 @@ function animateProgress(from, to, duration, isStopped, update) {
         resolve();
         return;
       }
-      const progress = Math.min(1, (now - startedAt) / duration);
-      const eased = 1 - (1 - progress) ** 3;
-      if (now - lastAppliedAt >= OVERLAY_FRAME_INTERVAL || progress >= 1) {
-        update(from + (to - from) * eased);
-        lastAppliedAt = now;
+      try {
+        const progress = Math.min(1, (now - startedAt) / duration);
+        const eased = 1 - (1 - progress) ** 3;
+        if (now - lastAppliedAt >= OVERLAY_FRAME_INTERVAL || progress >= 1) {
+          update(from + (to - from) * eased);
+          lastAppliedAt = now;
+        }
+        if (progress < 1) window.requestAnimationFrame(tick);
+        else resolve();
+      } catch (error) {
+        reject(error);
       }
-      if (progress < 1) window.requestAnimationFrame(tick);
-      else resolve();
     };
     window.requestAnimationFrame(tick);
   });
@@ -71,15 +75,16 @@ function animateRoute(routeOverlays, path, from, to, duration, isStopped) {
   return animateProgress(from, to, duration, isStopped, (progress) => setRouteProgress(routeOverlays, path, progress));
 }
 
-export function createTransactionSimulation({ AMap, map, places, routes, canvas, vehicleIcon }) {
+export function createTransactionSimulation({ TMap, map, places, routes, canvas, vehicleIcon }) {
   const availablePlaces = places.filter((place) => place.coordinates?.length === 2);
   let stopped = false;
+  let started = false;
   let spawnTimer;
   const activeTransactions = new Set();
   const placeVisuals = new Map();
 
   const clearTransactionOverlays = (transaction) => {
-    transaction.routeOverlays?.filter(Boolean).forEach((overlay) => overlay.setMap?.(null));
+    transaction.routeOverlays.forEach((overlay) => overlay.setMap?.(null));
   };
 
   const animatePlaceBuildings = (visual, target, duration) => {
@@ -116,7 +121,7 @@ export function createTransactionSimulation({ AMap, map, places, routes, canvas,
   const retainPlace = (place) => {
     let visual = placeVisuals.get(place.id);
     if (!visual) {
-      const [marker] = addPlaceHighlight(map, AMap, place, place.coordinates);
+      const [marker] = addPlaceHighlight(map, TMap, place, place.coordinates);
       visual = {
         place,
         marker,
@@ -135,7 +140,7 @@ export function createTransactionSimulation({ AMap, map, places, routes, canvas,
 
   const ensurePlaceBuildings = (visual) => {
     if (!visual.buildings.length) {
-      visual.buildings = addPlaceBuildings(map, AMap, visual.place.coordinates, BUILDING_PALETTES[visual.place.buildingPalette]);
+      visual.buildings = addPlaceBuildings(map, TMap, visual.place.coordinates, BUILDING_PALETTES[visual.place.buildingPalette]);
       visual.scale = INITIAL_BUILDING_SCALE;
     }
     return animatePlaceBuildings(visual, 1, BUILDING_RISE_DURATION);
@@ -167,14 +172,24 @@ export function createTransactionSimulation({ AMap, map, places, routes, canvas,
     transaction.finished = true;
     await wait(ARRIVAL_PAUSE);
     if (stopped || !activeTransactions.has(transaction)) return;
-    await Promise.all([
-      animateRoute(transaction.routeOverlays, transaction.path, 1, 0, CLEANUP_DURATION, () => stopped),
-      transaction.vehicleAnimation?.fadeOut?.(CLEANUP_DURATION) || Promise.resolve(),
-      ...transaction.placeVisuals.map((visual) => releasePlace(visual))
-    ]);
-    if (stopped || !activeTransactions.has(transaction)) return;
-    clearTransactionOverlays(transaction);
-    activeTransactions.delete(transaction);
+    try {
+      await Promise.all([
+        animateRoute(transaction.routeOverlays, transaction.path, 1, 0, CLEANUP_DURATION, () => stopped),
+        transaction.vehicleAnimation?.fadeOut?.(CLEANUP_DURATION) || Promise.resolve(),
+        ...transaction.placeVisuals.map((visual) => releasePlace(visual))
+      ]);
+    } finally {
+      if (!stopped && activeTransactions.has(transaction)) {
+        clearTransactionOverlays(transaction);
+        activeTransactions.delete(transaction);
+      }
+    }
+  };
+
+  const requestFinish = (transaction) => {
+    void finishTransaction(transaction).catch((error) => {
+      console.info('Map transaction cleanup failed', error);
+    });
   };
 
   const startTransaction = async () => {
@@ -184,31 +199,40 @@ export function createTransactionSimulation({ AMap, map, places, routes, canvas,
     const [origin, destination] = pair;
     const transaction = { origin, destination, placeVisuals: [], routeOverlays: [] };
     activeTransactions.add(transaction);
-    transaction.placeVisuals = [
-      retainPlace(origin),
-      retainPlace(destination)
-    ];
+    try {
+      transaction.placeVisuals.push(retainPlace(origin));
+      transaction.placeVisuals.push(retainPlace(destination));
+      const path = getRoutePath(routes, origin.id, destination.id, [origin.coordinates, destination.coordinates]);
+      await Promise.all(transaction.placeVisuals.map(ensurePlaceBuildings));
+      if (stopped || !activeTransactions.has(transaction)) return;
 
-    const path = getRoutePath(routes, origin.id, destination.id, [origin.coordinates, destination.coordinates]);
-    await Promise.all(transaction.placeVisuals.map(ensurePlaceBuildings));
-    if (stopped || !activeTransactions.has(transaction)) return;
+      transaction.path = path;
+      transaction.routeOverlays = addRoute(map, TMap, { path, color: origin.color });
+      await animateRoute(transaction.routeOverlays, path, 0, 1, ROUTE_DRAW_DURATION, () => stopped);
+      if (stopped || !activeTransactions.has(transaction)) return;
 
-    transaction.path = path;
-    transaction.routeOverlays = addRoute(map, AMap, { path, color: origin.color });
-    await animateRoute(transaction.routeOverlays, path, 0, 1, ROUTE_DRAW_DURATION, () => stopped);
-    if (stopped || !activeTransactions.has(transaction)) return;
-    if (stopped || !activeTransactions.has(transaction)) return;
-    const vehicleCanvas = createVehicleCanvas(canvas);
-    const transactionVehicleIcon = createVehicleIcon(vehicleIcon);
-    transaction.vehicleAnimation = loadVehicleAnimation(AMap, map, vehicleCanvas, [{ path }], transactionVehicleIcon, {
-      loop: false,
-      removeCanvas: true,
-      removeVehicleIcon: true,
-      onComplete: () => finishTransaction(transaction)
-    });
-    transaction.vehicleAnimation.ready.then((ready) => {
-      if (!ready && !transaction.finished) finishTransaction(transaction);
-    }).catch(() => finishTransaction(transaction));
+      const transactionCanvas = createVehicleCanvas(canvas);
+      const transactionVehicleIcon = createVehicleIcon(vehicleIcon);
+      transaction.canvas = transactionCanvas;
+      transaction.vehicleIcon = transactionVehicleIcon;
+      transaction.vehicleAnimation = loadVehicleAnimation(TMap, map, transactionCanvas, [{ path }], transactionVehicleIcon, {
+        loop: false,
+        removeCanvas: true,
+        removeVehicleIcon: true,
+        onComplete: () => requestFinish(transaction)
+      });
+      transaction.vehicleAnimation.ready.then((ready) => {
+        if (!ready && !transaction.finished) requestFinish(transaction);
+      }).catch(() => requestFinish(transaction));
+    } catch (error) {
+      console.info('Map transaction initialization failed', error);
+      transaction.vehicleAnimation?.cleanup();
+      transaction.canvas?.remove();
+      transaction.vehicleIcon?.remove();
+      await Promise.allSettled(transaction.placeVisuals.map(releasePlace));
+      clearTransactionOverlays(transaction);
+      activeTransactions.delete(transaction);
+    }
   };
 
   const scheduleNextTransaction = (delay = randomDelay()) => {
@@ -220,14 +244,19 @@ export function createTransactionSimulation({ AMap, map, places, routes, canvas,
   };
 
   const start = () => {
+    if (started || stopped || availablePlaces.length < 2) return;
+    started = true;
     scheduleNextTransaction(700 + Math.random() * 700);
   };
 
   const cleanup = () => {
+    if (stopped) return;
     stopped = true;
     if (spawnTimer) window.clearTimeout(spawnTimer);
     activeTransactions.forEach((transaction) => {
       transaction.vehicleAnimation?.cleanup();
+      transaction.canvas?.remove();
+      transaction.vehicleIcon?.remove();
       clearTransactionOverlays(transaction);
     });
     placeVisuals.forEach(disposePlaceVisual);

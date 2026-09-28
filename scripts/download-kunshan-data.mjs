@@ -33,4 +33,4 @@ await Promise.all([
   writeFile(new URL('kunshan-boundary.geojson', OUTPUT_DIR), `${JSON.stringify(boundary)}\n`),
   writeFile(new URL('kunshan-boundary-gcj02.json', SOURCE_DIR), `${JSON.stringify(transformGeoJSON(boundary))}\n`)
 ]);
-console.log('Saved Kunshan boundary data in src/data; buildings remain supplied by AMap.');
+console.log('Saved Kunshan boundary data in src/data.');

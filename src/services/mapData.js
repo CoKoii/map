@@ -1,12 +1,8 @@
 import boundaryData from '../data/kunshan-boundary-gcj02.json';
-import { MAP_PLACES, MAP_ROUTES } from '../data/mockDashboard';
+import { MAP_PLACES, MAP_ROUTES } from '../data/mapFixtures';
 
-export function fetchBoundary() {
-  return Promise.resolve(boundaryData);
-}
-
-export async function fetchMapData() {
-  return { places: MAP_PLACES, routes: MAP_ROUTES };
+export function getMapData() {
+  return { boundary: boundaryData, places: MAP_PLACES, routes: MAP_ROUTES };
 }
 
 export function getRoutePath(routes, originId, destinationId, coordinates) {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { distanceMeters, getRoutePrefix, getRouteSampler, toCoordinate } from '../src/utils/coordinates.js';
 
-test('toCoordinate normalizes array and AMap-like points', () => {
+test('toCoordinate normalizes coordinate arrays and map points', () => {
   assert.deepEqual(toCoordinate([120.98, 31.35, 100]), [120.98, 31.35]);
   assert.deepEqual(toCoordinate({ toArray: () => [120.99, 31.36] }), [120.99, 31.36]);
   assert.deepEqual(toCoordinate({ getLng: () => 121, getLat: () => 31.4 }), [121, 31.4]);

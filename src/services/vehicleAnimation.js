@@ -3,24 +3,38 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VEHICLE_CONFIG } from '../config/map';
 import { getRouteSampler } from '../utils/coordinates';
 
-function getMapPixel(map, AMap, coordinate) {
-  const lngLat = new AMap.LngLat(coordinate[0], coordinate[1]);
-  const pixel = map.lngLatToContainer?.(lngLat) || map.lngLatToPixel?.(lngLat, map.getZoom?.());
+function getMapPixel(map, TMap, coordinate) {
+  const latLng = new TMap.LatLng(coordinate[1], coordinate[0]);
+  const pixel = map.projectToContainer?.(latLng);
   if (!pixel) return null;
   if (Array.isArray(pixel)) return pixel;
   return [pixel.x, pixel.y];
 }
 
 function disposeObject(root) {
+  const disposed = new Set();
   root.traverse((node) => {
     if (!node.isMesh) return;
-    node.geometry?.dispose();
+    if (node.geometry && !disposed.has(node.geometry)) {
+      node.geometry.dispose();
+      disposed.add(node.geometry);
+    }
     const materials = Array.isArray(node.material) ? node.material : [node.material];
-    materials.forEach((material) => material?.dispose());
+    materials.forEach((material) => {
+      if (!material || disposed.has(material)) return;
+      Object.values(material).forEach((value) => {
+        if (value?.isTexture && !disposed.has(value)) {
+          value.dispose();
+          disposed.add(value);
+        }
+      });
+      material.dispose();
+      disposed.add(material);
+    });
   });
 }
 
-export function loadVehicleAnimation(AMap, map, canvas, routes, vehicleIcon, options = {}) {
+export function loadVehicleAnimation(TMap, map, canvas, routes, vehicleIcon, options = {}) {
   const { loop = true, onComplete, removeCanvas = false, removeVehicleIcon = false } = options;
   const samplers = routes.map(({ path }) => getRouteSampler(path)).filter(({ totalDistance }) => totalDistance > 0);
   if (!canvas || !samplers.length) {
@@ -53,6 +67,7 @@ export function loadVehicleAnimation(AMap, map, canvas, routes, vehicleIcon, opt
   let legStartedAt;
   let resizeObserver;
   let fadePromise;
+  let loadRequest;
 
   if (vehicleIcon) vehicleIcon.style.display = 'none';
 
@@ -74,8 +89,8 @@ export function loadVehicleAnimation(AMap, map, canvas, routes, vehicleIcon, opt
   const setVehicleTransform = (sampler, progress, travelDirection) => {
     const point = sampler.sample(progress);
     const nextPoint = sampler.sample(Math.min(1, progress + 0.003));
-    const screenPoint = getMapPixel(map, AMap, point);
-    const screenNextPoint = getMapPixel(map, AMap, nextPoint);
+    const screenPoint = getMapPixel(map, TMap, point);
+    const screenNextPoint = getMapPixel(map, TMap, nextPoint);
     if (!screenPoint || !screenNextPoint) return;
     vehicleRoot.position.set(screenPoint[0], canvas.clientHeight - screenPoint[1], 0);
     const angle = Math.atan2(screenPoint[1] - screenNextPoint[1], screenNextPoint[0] - screenPoint[0]);
@@ -90,7 +105,9 @@ export function loadVehicleAnimation(AMap, map, canvas, routes, vehicleIcon, opt
   };
 
   const cleanup = () => {
+    if (stopped) return;
     stopped = true;
+    loadRequest?.abort?.();
     if (frameId) window.cancelAnimationFrame(frameId);
     resizeObserver?.disconnect();
     if (vehicleIcon) vehicleIcon.style.display = 'none';
@@ -146,8 +163,9 @@ export function loadVehicleAnimation(AMap, map, canvas, routes, vehicleIcon, opt
 
   const ready = new Promise((resolve, reject) => {
     const loader = new GLTFLoader();
-    loader.load(VEHICLE_CONFIG.modelUrl, (gltf) => {
+    loadRequest = loader.load(VEHICLE_CONFIG.modelUrl, (gltf) => {
       if (stopped) {
+        disposeObject(gltf.scene);
         resolve(false);
         return;
       }
@@ -181,9 +199,20 @@ export function loadVehicleAnimation(AMap, map, canvas, routes, vehicleIcon, opt
         }
         frameId = window.requestAnimationFrame(animate);
       };
-      legStartedAt = performance.now();
-      frameId = window.requestAnimationFrame(animate);
-      resolve(true);
+      const startAnimation = () => {
+        if (stopped) {
+          resolve(false);
+          return;
+        }
+        legStartedAt = performance.now();
+        frameId = window.requestAnimationFrame(animate);
+        resolve(true);
+      };
+      if (typeof renderer.compileAsync === 'function') {
+        renderer.compileAsync(scene, camera).then(startAnimation, startAnimation);
+      } else {
+        startAnimation();
+      }
     }, undefined, reject);
   });
 

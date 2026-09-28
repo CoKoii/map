@@ -6,10 +6,9 @@ export const MAP_CONFIG = {
   pitch: 40.5,
   rotation: 100.7,
   zooms: [9, 20],
-  style: 'amap://styles/dark'
+  style: 'DARK'
 };
 
-export const POINT_MARKER_LIFT = 72;
 export const INITIAL_BUILDING_SCALE = 0.025;
 
 export const BUILDING_SPECS = [

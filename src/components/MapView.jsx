@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Truck } from 'lucide-react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faTruck } from '@fortawesome/free-solid-svg-icons';
 import { loadTencentMap } from '../services/tencentMap';
 import { MAP_CONFIG } from '../config/map';
 import { getMapData } from '../services/mapData';
 import { addBoundaryLayers } from '../services/mapOverlays';
-import { createTransactionSimulation } from '../services/transactionSimulation';
+import { createOrderMapTracking } from '../services/orderMapTracking';
+import { createPlacePresentation } from '../services/placePresentation';
+import { loadVehicleAnimation } from '../services/vehicleAnimation';
 
 function createMap(TMap, element) {
   return new TMap.Map(element, {
@@ -29,14 +32,20 @@ function createMap(TMap, element) {
 
 function loadScene({ TMap, map, mapData, canvas, overlays, vehicleIcon }) {
   overlays.push(...addBoundaryLayers(map, TMap, mapData.boundary));
-  return createTransactionSimulation({
-    TMap,
-    map,
-    places: mapData.places,
-    routes: mapData.routes,
-    canvas,
-    vehicleIcon
+  const placePresentation = createPlacePresentation({ TMap, map, places: mapData.places });
+  placePresentation.start();
+  const orderTracking = createOrderMapTracking({ TMap, map });
+  const vehicleAnimation = loadVehicleAnimation(TMap, map, canvas, [], vehicleIcon, {
+    positionProvider: orderTracking.getVehiclePosition
   });
+  return {
+    updateOrders: orderTracking.update,
+    cleanup() {
+      orderTracking.cleanup();
+      vehicleAnimation.cleanup();
+      placePresentation.cleanup();
+    }
+  };
 }
 
 function getMapErrorMessage(error) {
@@ -44,10 +53,13 @@ function getMapErrorMessage(error) {
   return '地图数据加载失败';
 }
 
-export default function MapView() {
+export default function MapView({ orders }) {
   const mapElement = useRef(null);
   const vehicleCanvas = useRef(null);
   const vehicleIcon = useRef(null);
+  const orderTrackingRef = useRef(null);
+  const ordersRef = useRef(orders);
+  ordersRef.current = orders;
   const [mapState, setMapState] = useState({ phase: 'loading', message: '地图数据加载中' });
   const [retryToken, setRetryToken] = useState(0);
   const ready = mapState.phase === 'ready';
@@ -57,7 +69,7 @@ export default function MapView() {
     let cancelled = false;
     let map;
     let overlays = [];
-    let transactionSimulation = { cleanup: () => {} };
+    let orderTracking = { updateOrders: () => {}, cleanup: () => {} };
 
     const initialize = async () => {
       setMapState({ phase: 'loading', message: '地图数据加载中' });
@@ -72,10 +84,11 @@ export default function MapView() {
           sceneLoaded = true;
           if (cancelled) return;
           try {
-            transactionSimulation = loadScene({ TMap, map, mapData, canvas: vehicleCanvas.current, overlays, vehicleIcon: vehicleIcon.current });
+            orderTracking = loadScene({ TMap, map, mapData, canvas: vehicleCanvas.current, overlays, vehicleIcon: vehicleIcon.current });
+            orderTrackingRef.current = orderTracking;
+            orderTracking.updateOrders(ordersRef.current || []);
             if (cancelled) return;
-            transactionSimulation.start();
-            setMapState({ phase: 'ready', message: '地图已连接 · mock 路线模拟中' });
+            setMapState({ phase: 'ready', message: '地图已连接 · 订单实时定位与轨迹已接入' });
           } catch (error) {
             console.info('Tencent Map data initialization failed', error);
             if (!cancelled) setMapState({ phase: 'error', message: getMapErrorMessage(error) });
@@ -90,17 +103,22 @@ export default function MapView() {
     initialize();
     return () => {
       cancelled = true;
-      transactionSimulation.cleanup();
+      orderTracking.cleanup();
+      if (orderTrackingRef.current === orderTracking) orderTrackingRef.current = null;
       overlays.forEach((overlay) => overlay.setMap?.(null));
       map?.destroy();
     };
   }, [retryToken]);
 
+  useEffect(() => {
+    orderTrackingRef.current?.updateOrders(orders || []);
+  }, [orders, mapState.phase]);
+
   return (
-    <section className="map-wrap" aria-label="建筑垃圾处置中心与花桥镇 mock 路线地图">
+    <section className="map-wrap" aria-label="昆山市装修垃圾收运订单实时定位与轨迹地图">
       <div id="map" ref={mapElement} />
       <canvas className="vehicle-layer" ref={vehicleCanvas} aria-hidden="true" />
-      <div className="vehicle-icon" ref={vehicleIcon} aria-hidden="true"><Truck size={20} strokeWidth={2.2} /></div>
+      <div className="vehicle-icon" ref={vehicleIcon} aria-hidden="true"><FontAwesomeIcon icon={faTruck} /></div>
       <div className="map-wash" />
       {!ready && <div className={`map-fallback ${hasError ? 'is-error' : ''}`}>
         <div className="loading-card">

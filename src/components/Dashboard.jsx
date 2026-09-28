@@ -1,39 +1,132 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  Building2,
-  CheckCircle2,
-  ClipboardList,
-  FileText,
-  Landmark,
-  MapPin,
-  PackageCheck,
-  Recycle,
-  Route,
-  Truck,
-  UserRound
-} from 'lucide-react';
+  faBuilding,
+  faCircleCheck,
+  faClipboardList,
+  faFileLines,
+  faLandmark,
+  faLocationDot,
+  faRecycle,
+  faTruck,
+  faUser
+} from '@fortawesome/free-solid-svg-icons';
 import {
-  AREA_DISTRIBUTION,
   EXECUTION_METRICS,
   PROCESS_STEPS,
   SERVICE_ITEMS,
   STAT_ITEMS,
-  TRACKING_STEPS
 } from '../data/dashboardFixtures';
+import { fetchDashboardOrders, fetchDashboardOverview } from '../services/dashboardApi';
+
+const EXECUTION_FIELDS = ['pendingCount', 'inProgressCount', 'completedCount'];
+
+export function useDashboardData() {
+  const [overview, setOverview] = useState(null);
+  const [orders, setOrders] = useState(null);
+  const [overviewError, setOverviewError] = useState(false);
+  const [ordersError, setOrdersError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    let controllers = [];
+
+    const refresh = () => {
+      controllers.forEach((controller) => controller.abort());
+      controllers = [new AbortController(), new AbortController()];
+      const [overviewController, ordersController] = controllers;
+
+      fetchDashboardOverview(overviewController.signal).then((data) => {
+        if (active) {
+          setOverview(data);
+          setOverviewError(false);
+        }
+      }).catch((error) => {
+        if (active && error.name !== 'AbortError') setOverviewError(true);
+      });
+
+      fetchDashboardOrders(ordersController.signal).then((data) => {
+        if (active) {
+          setOrders(Array.isArray(data.orderList) ? data.orderList : []);
+          setOrdersError(false);
+        }
+      }).catch((error) => {
+        if (active && error.name !== 'AbortError') setOrdersError(true);
+      });
+    };
+
+    refresh();
+    const timer = window.setInterval(refresh, 30000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      controllers.forEach((controller) => controller.abort());
+    };
+  }, []);
+
+  return { overview, orders, overviewError, ordersError };
+}
+
+function useDataCarousel(itemCount, visibleCount) {
+  const [startIndex, setStartIndex] = useState(0);
+
+  useEffect(() => {
+    setStartIndex((current) => itemCount ? current % itemCount : 0);
+  }, [itemCount]);
+
+  useEffect(() => {
+    if (itemCount <= visibleCount) return undefined;
+    const timer = window.setInterval(() => setStartIndex((current) => (current + 1) % itemCount), 2000);
+    return () => window.clearInterval(timer);
+  }, [itemCount, visibleCount]);
+
+  return {
+    visibleItems: (items) => Array.from(
+      { length: Math.min(items.length, visibleCount) },
+      (_, offset) => items[(startIndex + offset) % items.length]
+    )
+  };
+}
+
+function displayNumber(value, fractionDigits = 0) {
+  if (value === null || value === undefined || value === '') return '—';
+  const number = Number(value);
+  return Number.isFinite(number)
+    ? number.toLocaleString('zh-CN', { maximumFractionDigits: fractionDigits })
+    : String(value);
+}
+
+const TRACKING_STEPS = ['预约提交', '车辆到场', '交付确认', '运输中', '到场回执'];
+
+function getTrackingStage(order) {
+  if (!order) return -1;
+  const logs = order?.orderLog;
+  const lastLog = Array.isArray(logs) ? logs[logs.length - 1] : null;
+  const status = order.status || lastLog?.postStatusName || '';
+  if (/回执|完成|联单确认/.test(status)) return 4;
+  if (/运输/.test(status)) return 3;
+  if (/交付/.test(status)) return 2;
+  if (/装载|到场/.test(status)) return 1;
+  return 0;
+}
 
 const ICONS = {
-  building: Building2,
-  check: CheckCircle2,
-  clipboard: ClipboardList,
-  file: FileText,
-  landmark: Landmark,
-  pin: MapPin,
-  recycle: Recycle,
-  truck: Truck,
-  user: UserRound
+  building: faBuilding,
+  check: faCircleCheck,
+  clipboard: faClipboardList,
+  file: faFileLines,
+  landmark: faLandmark,
+  pin: faLocationDot,
+  recycle: faRecycle,
+  truck: faTruck,
+  user: faUser
 };
 
-export function DashboardHeader() {
+function PageIcon({ name, size, ...props }) {
+  return <FontAwesomeIcon icon={ICONS[name]} width={size} height={size} {...props} />;
+}
+
+export function DashboardHeader({ apiState }) {
   return (
     <header className="map-title">
       <div className="brand-lockup">
@@ -48,24 +141,44 @@ export function DashboardHeader() {
       </div>
       <div className="title-lockup">
         <h1>昆山市装修垃圾收运<em>运行总览</em></h1>
-        <div className="title-rule"><span /><b>小程序预约　·　装修清运　·　全程可查</b><span /></div>
+        <div className="title-rule">
+          <svg className="header-ornament" viewBox="-32 0 1424 32" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="header-ornament-gold" x1="0" x2="1">
+                <stop offset="0" stopColor="#9b8050" stopOpacity="0.55" />
+                <stop offset="0.5" stopColor="#f0d28d" />
+                <stop offset="1" stopColor="#9b8050" stopOpacity="0.55" />
+              </linearGradient>
+            </defs>
+            <path d="M-32 12H353L365 22H388L399 28H508 M852 28H961L972 22H995L1007 12H1392" />
+            <path className="header-ornament-detail" d="M-32 15H351L362 24H388 M972 24H998L1009 15H1392" />
+          </svg>
+          <b>小程序预约　·　装修清运　·　全程可查</b>
+        </div>
       </div>
       <div className="top-meta">
-        <strong>设计方案 · 演示数据</strong>
+        <strong className={`api-state ${apiState}`}>{apiState === 'loading' ? '数据加载中' : apiState === 'error' ? '数据接口异常' : '实时业务数据'}</strong>
         <div>精细管理　 高效收运　 洁净昆山</div>
       </div>
     </header>
   );
 }
 
-function StatStrip() {
+function StatStrip({ overview }) {
+  const values = overview ? [
+    overview.monthlyCollectionWeight,
+    overview.monthlyCompletedTrips,
+    overview.servedCommunityCount,
+    overview.inServiceVehicleCount
+  ] : [];
+
   return (
     <section className="stat-strip" aria-label="运营指标">
-      {STAT_ITEMS.map(({ label, value, unit, icon }) => {
-        const Icon = ICONS[icon];
+      {STAT_ITEMS.map(({ label, unit, icon }, index) => {
+        const value = values[index] === undefined ? '—' : displayNumber(values[index], index === 0 ? 2 : 0);
         return (
           <div className="stat-item" key={label}>
-            <Icon size={30} strokeWidth={1.7} aria-hidden="true" />
+            <PageIcon name={icon} size={30} aria-hidden="true" />
             <div className="stat-copy"><span>{label}</span><strong>{value}<small>{unit}</small></strong></div>
           </div>
         );
@@ -74,12 +187,11 @@ function StatStrip() {
   );
 }
 
-function Panel({ title, meta, icon: Icon, children, className = '' }) {
+function Panel({ title, meta, children, className = '' }) {
   return (
     <section className={['dashboard-panel', className].filter(Boolean).join(' ')}>
       <div className="panel-heading">
         <div className="panel-title">
-          {Icon && <Icon size={20} strokeWidth={1.8} aria-hidden="true" />}
           <h2>{title}</h2>
         </div>
         {meta && <span>{meta}</span>}
@@ -91,13 +203,12 @@ function Panel({ title, meta, icon: Icon, children, className = '' }) {
 
 function ServicePanel() {
   return (
-    <Panel title="预约服务" meta="多方参与 · 便捷预约" icon={ClipboardList}>
+    <Panel title="预约服务" meta="多方参与 · 便捷预约">
       <div className="service-list">
         {SERVICE_ITEMS.map(({ icon, title, detail }) => {
-          const Icon = ICONS[icon];
           return (
             <div className="service-row" key={title}>
-              <Icon size={32} strokeWidth={1.7} aria-hidden="true" />
+              <PageIcon name={icon} size={32} aria-hidden="true" />
               <div><strong>{title}</strong><span>{detail}</span></div>
             </div>
           );
@@ -107,51 +218,59 @@ function ServicePanel() {
   );
 }
 
-function DistributionPanel() {
-  const maxValue = Math.max(...AREA_DISTRIBUTION.map(([, value]) => value));
+function DistributionPanel({ regions = [], loading, error }) {
+  const carousel = useDataCarousel(regions.length, 4);
+  const visibleRegions = carousel.visibleItems(regions);
+  const maxValue = Math.max(1, ...regions.map((item) => Number(item.collectionCount) || 0));
   return (
-    <Panel title="区域收运分布" meta="本月完成车次" icon={Route}>
+    <Panel title="区域收运分布" meta="完成车次 · 吨" className="carousel-panel">
       <div className="bar-list">
-        {AREA_DISTRIBUTION.map(([name, value]) => (
-          <div className="bar-row" key={name}>
-            <span>{name}</span>
-            <div className="bar-track"><i style={{ width: `${(value / maxValue) * 100}%` }} /></div>
-            <b>{value}</b>
-          </div>
-        ))}
+        {regions.length ? visibleRegions.map((item) => {
+          const count = Number(item.collectionCount) || 0;
+          return <div className="bar-row data-carousel-row" key={item.regionId ?? item.regionName}>
+            <span title={item.regionName}>{item.regionName || '未命名区域'}</span>
+            <div className="bar-track"><i style={{ width: `${(count / maxValue) * 100}%` }} /></div>
+            <b title={`${displayNumber(item.collectionWeight, 2)} 吨`}>{displayNumber(count)}<small>{displayNumber(item.collectionWeight, 1)} 吨</small></b>
+          </div>;
+        }) : <div className="data-empty">{loading ? '区域数据加载中' : error ? '区域数据暂不可用' : '暂无区域收运数据'}</div>}
       </div>
     </Panel>
   );
 }
 
-function ExecutionPanel() {
+function ExecutionPanel({ execution }) {
   return (
-    <Panel title="收运执行" meta="今日任务 · 单" icon={Truck}>
+    <Panel title="收运执行" meta="今日任务 · 单">
       <div className="execution-grid">
-        {EXECUTION_METRICS.map(({ icon, value, label }) => {
-          const Icon = ICONS[icon];
-          return <div key={label}><Icon size={28} aria-hidden="true" /><strong>{value}</strong><span>{label}</span></div>;
+        {EXECUTION_METRICS.map(({ icon, label }, index) => {
+          const value = execution ? displayNumber(execution[EXECUTION_FIELDS[index]]) : '—';
+          return <div key={label}><PageIcon name={icon} size={28} aria-hidden="true" /><strong>{value}</strong><span>{label}</span></div>;
         })}
       </div>
     </Panel>
   );
 }
 
-function TrackingPanel() {
+function TrackingPanel({ orders = [], loading, error }) {
+  const order = orders.slice().sort((left, right) => String(right.realtimeTrack?.updateTime || '').localeCompare(String(left.realtimeTrack?.updateTime || '')))[0];
+  const currentStep = getTrackingStage(order);
   return (
-    <Panel title="清运任务追踪" meta="全流程可查 · 实时记录" icon={PackageCheck} className="tracking-panel">
-      <div className="tracking-meta"><span>示例任务　KS-0916-028</span><span>预约收集点 → 接收场所</span></div>
+    <Panel title="清运任务追踪" meta="全流程可查 · 实时记录" className="tracking-panel">
+      <div className="tracking-meta">
+        <span>{order?.orderNo || (loading ? '订单数据加载中' : error ? '订单数据暂不可用' : '暂无当前任务')}</span>
+        <span title={order?.communityProject}>{order?.communityProject || '预约收集点'} → 接收场所</span>
+      </div>
       <div className="tracking-steps">
         {TRACKING_STEPS.map((step, index) => (
-          <div className={`tracking-step ${index < 4 ? 'is-done' : ''}`} key={step}>
-            <span>{index < 4 ? <CheckCircle2 size={22} /> : <i />}</span>
+          <div className={`tracking-step ${index < currentStep ? 'is-done' : ''} ${index === currentStep ? 'is-current' : ''}`} key={step}>
+            <span>{currentStep >= 0 && index < currentStep ? <PageIcon name="check" size={21} /> : currentStep >= 0 && index === currentStep ? <PageIcon name="truck" size={19} /> : <i />}</span>
             <b>{step}</b>
           </div>
         ))}
       </div>
       <div className="tracking-media">
-        <div><strong>装修垃圾</strong><span>规范清运</span></div>
-        <Truck size={52} strokeWidth={1.35} aria-hidden="true" />
+        <div><strong>袋装装修垃圾</strong><span>规范收运　·　全程可查</span></div>
+        <PageIcon name="truck" size={58} aria-hidden="true" />
       </div>
     </Panel>
   );
@@ -161,10 +280,9 @@ function ProcessBar() {
   return (
     <nav className="process-bar" aria-label="清运流程">
       {PROCESS_STEPS.map(([label, icon], index) => {
-        const Icon = ICONS[icon];
         return (
           <React.Fragment key={label}>
-            <div className="process-step"><span><Icon size={21} strokeWidth={1.6} /></span><b>{label}</b></div>
+            <div className="process-step"><span><PageIcon name={icon} size={21} /></span><b>{label}</b></div>
             {index < PROCESS_STEPS.length - 1 && <i aria-hidden="true">›</i>}
           </React.Fragment>
         );
@@ -173,12 +291,12 @@ function ProcessBar() {
   );
 }
 
-export default function DashboardOverlay() {
+export default function DashboardOverlay({ overview, orders, overviewError, ordersError }) {
   return (
     <div className="dashboard-overlay">
-      <StatStrip />
-      <aside className="dashboard-rail dashboard-rail-left"><ServicePanel /><DistributionPanel /></aside>
-      <aside className="dashboard-rail dashboard-rail-right"><ExecutionPanel /><TrackingPanel /></aside>
+      <StatStrip overview={overview?.overview} />
+      <aside className="dashboard-rail dashboard-rail-left"><ServicePanel /><DistributionPanel regions={Array.isArray(overview?.regionCollection) ? overview.regionCollection : []} loading={!overview && !overviewError} error={overviewError} /></aside>
+      <aside className="dashboard-rail dashboard-rail-right"><ExecutionPanel execution={overview?.execution} /><TrackingPanel orders={orders || []} loading={!orders && !ordersError} error={ordersError} /></aside>
       <ProcessBar />
     </div>
   );

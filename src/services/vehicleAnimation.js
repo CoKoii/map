@@ -35,9 +35,9 @@ function disposeObject(root) {
 }
 
 export function loadVehicleAnimation(TMap, map, canvas, routes, vehicleIcon, options = {}) {
-  const { loop = true, onComplete, removeCanvas = false, removeVehicleIcon = false } = options;
+  const { loop = true, onComplete, removeCanvas = false, removeVehicleIcon = false, positionProvider } = options;
   const samplers = routes.map(({ path }) => getRouteSampler(path)).filter(({ totalDistance }) => totalDistance > 0);
-  if (!canvas || !samplers.length) {
+  if (!canvas || (!samplers.length && typeof positionProvider !== 'function')) {
     return {
       cleanup: () => {
         if (removeCanvas) canvas?.remove();
@@ -86,9 +86,7 @@ export function loadVehicleAnimation(TMap, map, canvas, routes, vehicleIcon, opt
     resizeObserver.observe(canvas);
   }
 
-  const setVehicleTransform = (sampler, progress, travelDirection) => {
-    const point = sampler.sample(progress);
-    const nextPoint = sampler.sample(Math.min(1, progress + 0.003));
+  const setVehiclePosition = (point, nextPoint, travelDirection = 1) => {
     const screenPoint = getMapPixel(map, TMap, point);
     const screenNextPoint = getMapPixel(map, TMap, nextPoint);
     if (!screenPoint || !screenNextPoint) return;
@@ -102,6 +100,10 @@ export function loadVehicleAnimation(TMap, map, canvas, routes, vehicleIcon, opt
       vehicleIcon.style.transform = 'translate(-50%, -50%)';
       vehicleIcon.style.display = 'grid';
     }
+  };
+
+  const setVehicleTransform = (sampler, progress, travelDirection) => {
+    setVehiclePosition(sampler.sample(progress), sampler.sample(Math.min(1, progress + 0.003)), travelDirection);
   };
 
   const cleanup = () => {
@@ -180,6 +182,18 @@ export function loadVehicleAnimation(TMap, map, canvas, routes, vehicleIcon, opt
       vehicleRoot.add(vehicle);
       const animate = (now) => {
         if (stopped || !vehicle) return;
+        if (typeof positionProvider === 'function') {
+          const current = positionProvider();
+          if (current?.coordinate) {
+            setVehiclePosition(current.coordinate, current.nextCoordinate || [current.coordinate[0] + 0.00001, current.coordinate[1]]);
+          } else if (vehicleIcon) {
+            vehicleIcon.style.display = 'none';
+          }
+          renderer.render(scene, camera);
+          frameId = window.requestAnimationFrame(animate);
+          return;
+        }
+
         const sampler = samplers[routeIndex];
         const elapsed = (now - legStartedAt) / VEHICLE_CONFIG.legDuration;
         const progress = direction === 1 ? Math.min(1, elapsed) : 1 - Math.min(1, elapsed);

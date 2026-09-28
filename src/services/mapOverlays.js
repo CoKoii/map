@@ -1,5 +1,6 @@
 import { BUILDING_SPECS, INITIAL_BUILDING_SCALE } from '../config/map';
 import { getRoutePrefix } from '../utils/coordinates';
+import { faBuilding, faTree } from '@fortawesome/free-solid-svg-icons';
 
 const LABEL_CARD_HEIGHT = 44;
 const PLACE_LABEL_HEIGHT = LABEL_CARD_HEIGHT + 4;
@@ -46,8 +47,8 @@ export function addBoundaryLayers(map, TMap, boundary) {
 }
 
 const PLACE_ICONS = {
-  building: '<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18ZM6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2M10 6h4M10 10h4M10 14h4M10 18h4"/>',
-  tree: '<path d="m17 14 3 3.3a1 1 0 0 1-.7 1.7H4.7a1 1 0 0 1-.7-1.7L7 14h-.3a1 1 0 0 1-.7-1.7L9 9h-.2A1 1 0 0 1 8 7.3L12 3l4 4.3a1 1 0 0 1-.8 1.7H15l3 3.3a1 1 0 0 1-.7 1.7H17ZM12 22v-3"/>'
+  building: faBuilding.icon,
+  tree: faTree.icon
 };
 
 function escapeXml(value) {
@@ -63,11 +64,12 @@ function getPlaceLabelWidth(name) {
 
 function placeIcon(place, width) {
   const icon = PLACE_ICONS[place.icon] || PLACE_ICONS.building;
+  const [iconWidth, iconHeight, , , path] = icon;
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${PLACE_LABEL_HEIGHT}" viewBox="0 0 ${width} ${PLACE_LABEL_HEIGHT}">
       <rect x="1" y="2" width="${width - 2}" height="${LABEL_CARD_HEIGHT}" rx="8" fill="#0c1d1d" fill-opacity=".96" stroke="${place.color}"/>
       <circle cx="25" cy="24" r="16" fill="${place.color}"/>
-      <g transform="translate(13 12)" fill="none" stroke="#102629" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icon}</g>
+      <svg x="13" y="12" width="24" height="24" viewBox="0 0 ${iconWidth} ${iconHeight}"><path fill="#102629" d="${path}"/></svg>
       <text x="${LABEL_TEXT_X}" y="29" fill="#fff1b8" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="600">${escapeXml(place.name)}</text>
     </svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;

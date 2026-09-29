@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VEHICLE_CONFIG } from '../config/map';
-import { getRouteSampler } from '../utils/coordinates';
 
 function getMapPixel(map, TMap, coordinate) {
   const latLng = new TMap.LatLng(coordinate[1], coordinate[0]);
@@ -34,15 +33,10 @@ function disposeObject(root) {
   });
 }
 
-export function loadVehicleAnimation(TMap, map, canvas, routes, vehicleIcon, options = {}) {
-  const { loop = true, onComplete, removeCanvas = false, removeVehicleIcon = false, positionProvider } = options;
-  const samplers = routes.map(({ path }) => getRouteSampler(path)).filter(({ totalDistance }) => totalDistance > 0);
-  if (!canvas || (!samplers.length && typeof positionProvider !== 'function')) {
+export function loadVehicleAnimation(TMap, map, canvas, positionProvider) {
+  if (!canvas || typeof positionProvider !== 'function') {
     return {
-      cleanup: () => {
-        if (removeCanvas) canvas?.remove();
-        if (removeVehicleIcon) vehicleIcon?.remove();
-      },
+      cleanup: () => {},
       ready: Promise.resolve(false)
     };
   }
@@ -52,24 +46,17 @@ export function loadVehicleAnimation(TMap, map, canvas, routes, vehicleIcon, opt
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(0, canvas.clientWidth, canvas.clientHeight, 0, -1000, 1000);
-  const vehicleRoot = new THREE.Group();
-  vehicleRoot.rotation.x = THREE.MathUtils.degToRad(-VEHICLE_CONFIG.pitch);
   const ambientLight = new THREE.HemisphereLight(0xffffff, 0x182a2e, 2.3);
   const keyLight = new THREE.DirectionalLight(0xffe7a5, 3.5);
   keyLight.position.set(-200, -300, 500);
-  scene.add(ambientLight, keyLight, vehicleRoot);
+  scene.add(ambientLight, keyLight);
 
   let vehicle;
-  let frameId;
+  const vehicles = new Map();
   let stopped = false;
-  let routeIndex = 0;
-  let direction = 1;
-  let legStartedAt;
   let resizeObserver;
-  let fadePromise;
   let loadRequest;
-
-  if (vehicleIcon) vehicleIcon.style.display = 'none';
+  let renderVehicles = () => {};
 
   const resize = () => {
     const width = canvas.clientWidth || canvas.parentElement.clientWidth;
@@ -79,6 +66,7 @@ export function loadVehicleAnimation(TMap, map, canvas, routes, vehicleIcon, opt
     camera.top = height;
     camera.bottom = 0;
     camera.updateProjectionMatrix();
+    renderVehicles();
   };
   resize();
   if (typeof ResizeObserver !== 'undefined') {
@@ -86,81 +74,27 @@ export function loadVehicleAnimation(TMap, map, canvas, routes, vehicleIcon, opt
     resizeObserver.observe(canvas);
   }
 
-  const setVehiclePosition = (point, nextPoint, travelDirection = 1) => {
+  const setVehiclePosition = (root, point, nextPoint) => {
     const screenPoint = getMapPixel(map, TMap, point);
     const screenNextPoint = getMapPixel(map, TMap, nextPoint);
     if (!screenPoint || !screenNextPoint) return;
-    vehicleRoot.position.set(screenPoint[0], canvas.clientHeight - screenPoint[1], 0);
+    root.position.set(screenPoint[0], canvas.clientHeight - screenPoint[1], 0);
     const angle = Math.atan2(screenPoint[1] - screenNextPoint[1], screenNextPoint[0] - screenPoint[0]);
-    const rotation = angle + VEHICLE_CONFIG.forwardOffset + (travelDirection === -1 ? Math.PI : 0);
-    vehicleRoot.rotation.z = rotation;
-    if (vehicleIcon) {
-      vehicleIcon.style.left = `${screenPoint[0]}px`;
-      vehicleIcon.style.top = `${screenPoint[1] - VEHICLE_CONFIG.iconLift}px`;
-      vehicleIcon.style.transform = 'translate(-50%, -50%)';
-      vehicleIcon.style.display = 'grid';
-    }
-  };
-
-  const setVehicleTransform = (sampler, progress, travelDirection) => {
-    setVehiclePosition(sampler.sample(progress), sampler.sample(Math.min(1, progress + 0.003)), travelDirection);
+    root.rotation.z = angle + VEHICLE_CONFIG.forwardOffset;
   };
 
   const cleanup = () => {
     if (stopped) return;
     stopped = true;
     loadRequest?.abort?.();
-    if (frameId) window.cancelAnimationFrame(frameId);
     resizeObserver?.disconnect();
-    if (vehicleIcon) vehicleIcon.style.display = 'none';
-    disposeObject(vehicleRoot);
-    vehicleRoot.clear();
+    vehicles.forEach(({ root }) => {
+      scene.remove(root);
+      root.clear();
+    });
+    vehicles.clear();
+    if (vehicle) disposeObject(vehicle);
     renderer.dispose();
-    if (removeCanvas) canvas.remove();
-    if (removeVehicleIcon) vehicleIcon?.remove();
-  };
-
-  const fadeOut = (duration = 700) => {
-    if (fadePromise) return fadePromise;
-    if (stopped || !vehicle) {
-      cleanup();
-      return Promise.resolve();
-    }
-
-    const materials = [];
-    vehicle.traverse((node) => {
-      if (!node.isMesh) return;
-      const nodeMaterials = Array.isArray(node.material) ? node.material : [node.material];
-      nodeMaterials.forEach((material) => {
-        if (!material) return;
-        material.transparent = true;
-        materials.push(material);
-      });
-    });
-
-    fadePromise = new Promise((resolve) => {
-      const startedAt = performance.now();
-      const tick = (now) => {
-        if (stopped) {
-          resolve();
-          return;
-        }
-        const progress = Math.min(1, (now - startedAt) / duration);
-        const eased = 1 - (1 - progress) ** 3;
-        const opacity = 1 - eased;
-        vehicleRoot.scale.setScalar(opacity);
-        materials.forEach((material) => { material.opacity = opacity; });
-        renderer.render(scene, camera);
-        if (progress < 1) {
-          frameId = window.requestAnimationFrame(tick);
-          return;
-        }
-        cleanup();
-        resolve();
-      };
-      frameId = window.requestAnimationFrame(tick);
-    });
-    return fadePromise;
   };
 
   const ready = new Promise((resolve, reject) => {
@@ -179,54 +113,38 @@ export function loadVehicleAnimation(TMap, map, canvas, routes, vehicleIcon, opt
         node.castShadow = false;
         node.receiveShadow = false;
       });
-      vehicleRoot.add(vehicle);
-      const animate = (now) => {
+      renderVehicles = () => {
         if (stopped || !vehicle) return;
-        if (typeof positionProvider === 'function') {
-          const current = positionProvider();
-          if (current?.coordinate) {
-            setVehiclePosition(current.coordinate, current.nextCoordinate || [current.coordinate[0] + 0.00001, current.coordinate[1]]);
-          } else if (vehicleIcon) {
-            vehicleIcon.style.display = 'none';
+        const positions = positionProvider() || [];
+        const visibleIds = new Set();
+        positions.forEach(({ id, coordinate, nextCoordinate }) => {
+          if (!coordinate) return;
+          const key = String(id);
+          visibleIds.add(key);
+          let instance = vehicles.get(key);
+          if (!instance) {
+            const root = new THREE.Group();
+            const model = vehicle.clone(true);
+            model.scale.setScalar(VEHICLE_CONFIG.scale);
+            model.rotation.set(Math.PI / 2, 0, 0);
+            root.rotation.x = THREE.MathUtils.degToRad(-VEHICLE_CONFIG.pitch);
+            root.add(model);
+            scene.add(root);
+            instance = { root };
+            vehicles.set(key, instance);
           }
-          renderer.render(scene, camera);
-          frameId = window.requestAnimationFrame(animate);
-          return;
-        }
-
-        const sampler = samplers[routeIndex];
-        const elapsed = (now - legStartedAt) / VEHICLE_CONFIG.legDuration;
-        const progress = direction === 1 ? Math.min(1, elapsed) : 1 - Math.min(1, elapsed);
-        setVehicleTransform(sampler, progress, direction);
+          setVehiclePosition(instance.root, coordinate, nextCoordinate || [coordinate[0] + 0.00001, coordinate[1]]);
+        });
+        vehicles.forEach(({ root }, id) => {
+          if (visibleIds.has(id)) return;
+          scene.remove(root);
+          root.clear();
+          vehicles.delete(id);
+        });
         renderer.render(scene, camera);
-        if (elapsed >= 1) {
-          if (!loop) {
-            onComplete?.();
-            return;
-          }
-          if (direction === 1) direction = -1;
-          else {
-            direction = 1;
-            routeIndex = (routeIndex + 1) % samplers.length;
-          }
-          legStartedAt = now;
-        }
-        frameId = window.requestAnimationFrame(animate);
       };
-      const startAnimation = () => {
-        if (stopped) {
-          resolve(false);
-          return;
-        }
-        legStartedAt = performance.now();
-        frameId = window.requestAnimationFrame(animate);
-        resolve(true);
-      };
-      if (typeof renderer.compileAsync === 'function') {
-        renderer.compileAsync(scene, camera).then(startAnimation, startAnimation);
-      } else {
-        startAnimation();
-      }
+      renderVehicles();
+      resolve(true);
     }, undefined, reject);
   });
 
@@ -234,5 +152,5 @@ export function loadVehicleAnimation(TMap, map, canvas, routes, vehicleIcon, opt
     cleanup();
     console.info('3D vehicle model initialization failed', error);
   });
-  return { cleanup, fadeOut, ready };
+  return { cleanup, ready, render: () => renderVehicles() };
 }

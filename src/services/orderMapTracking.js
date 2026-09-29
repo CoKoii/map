@@ -1,7 +1,8 @@
-import { addRoute, setRouteProgress } from './mapOverlays';
+import { addRoute } from './mapOverlays';
+import { createOrderBuildings } from './orderBuildings';
 
-const MAX_TRACK_POINTS = 120;
-const ROUTE_COLORS = ['#70e0c0', '#ffd477', '#67c7ec', '#f59d72'];
+const ROUTE_COLORS = ['#58f2c7', '#ffe45e', '#47d7ff', '#ff8b62'];
+const COMPLETED_STATUSES = new Set(['10013040', '10013160', '10013180']);
 
 function validCoordinate(track) {
   const lng = Number(track?.lng);
@@ -11,98 +12,156 @@ function validCoordinate(track) {
     : null;
 }
 
+function validOrderCoordinate(point) {
+  const coordinate = validCoordinate(point);
+  if (!coordinate) return null;
+  const [lng, lat] = coordinate;
+  return lng >= 119 && lng <= 123 && lat >= 29 && lat <= 33 ? coordinate : null;
+}
+
 function distanceSquared(left, right) {
-  return (left[0] - right[0]) ** 2 + (left[1] - right[1]) ** 2;
+  const longitudeScale = Math.cos((left[1] * Math.PI) / 180);
+  return ((left[0] - right[0]) * longitudeScale) ** 2 + (left[1] - right[1]) ** 2;
 }
 
-function escapeXml(value) {
-  return String(value).replace(/[<>&"']/g, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[character]);
+function resolveEndpoint(routePoint, reportedPoint) {
+  if (routePoint && reportedPoint && distanceSquared(routePoint, reportedPoint) > 0.0001) {
+    return routePoint;
+  }
+  return reportedPoint || routePoint;
 }
 
-function markerImage(order, color) {
-  const plate = escapeXml(order.vehiclePlate || order.orderNo || '车辆');
-  const status = escapeXml(order.status || '状态未知');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="156" height="62" viewBox="0 0 156 62"><rect x="1" y="1" width="154" height="34" rx="7" fill="#0b2024" fill-opacity=".96" stroke="${color}"/><text x="78" y="15" fill="#fff0c5" font-family="sans-serif" font-size="11" text-anchor="middle">${plate}</text><text x="78" y="29" fill="#a9c4b7" font-family="sans-serif" font-size="9" text-anchor="middle">${status}</text><path d="M78 35v8" stroke="${color}" stroke-width="1.5"/><circle cx="78" cy="51" r="9" fill="#102c32" stroke="${color}" stroke-width="2"/><path d="M72 52v-4h7l3 3v3h-1a2 2 0 0 0-4 0h-2a2 2 0 0 0-4 0h-1v-2zm8-3v2h2l-2-2zm-6 4a1 1 0 1 1 2 0 1 1 0 0 1-2 0zm6 0a1 1 0 1 1 2 0 1 1 0 0 1-2 0z" fill="${color}"/></svg>`;
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+function isCompleted(order) {
+  const status = String(order.realtimeTrack?.status || order.statusCode || '');
+  return COMPLETED_STATUSES.has(status) || /已完成|交易完成|到场回执/.test(String(order.status || ''));
+}
+
+function normalizeTrack(points = []) {
+  if (!Array.isArray(points)) return [];
+  return points.reduce((path, point) => {
+    const coordinate = validCoordinate(point);
+    const previous = path[path.length - 1];
+    if (coordinate && (coordinate[0] !== previous?.[0] || coordinate[1] !== previous?.[1])) {
+      path.push(coordinate);
+    }
+    return path;
+  }, []);
+}
+
+function getRouteColor(orderId, fallbackIndex) {
+  if (!orderId) return ROUTE_COLORS[fallbackIndex % ROUTE_COLORS.length];
+  let hash = 0;
+  for (const character of String(orderId)) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  return ROUTE_COLORS[hash % ROUTE_COLORS.length];
 }
 
 export function createOrderMapTracking({ TMap, map }) {
-  const histories = new Map();
-  let markerOverlay;
-  let routeOverlays = [];
-  let latestVehiclePosition = null;
+  const buildings = createOrderBuildings({ TMap, map });
+  const routeOverlays = new Map();
+  let vehiclePositions = [];
 
-  const clearOverlays = () => {
-    markerOverlay?.setMap?.(null);
-    markerOverlay = null;
-    routeOverlays.forEach((overlay) => overlay.setMap?.(null));
-    routeOverlays = [];
+  const removeRoute = (id) => {
+    routeOverlays.get(id)?.overlays.forEach((overlay) => overlay.setMap?.(null));
+    routeOverlays.delete(id);
+  };
+
+  const clearRoutes = () => {
+    routeOverlays.forEach(({ overlays }) => overlays.forEach((overlay) => overlay.setMap?.(null)));
+    routeOverlays.clear();
+  };
+
+  const samePath = (left, right) => left.length === right.length
+    && left.every(([longitude, latitude], index) => (
+      longitude === right[index][0] && latitude === right[index][1]
+    ));
+
+  const syncRoutes = (orders) => {
+    const desiredIds = new Set();
+
+    orders.forEach(({ id, fullPath, color }) => {
+      if (fullPath.length < 2) return;
+      desiredIds.add(id);
+      const current = routeOverlays.get(id);
+      if (current?.color === color && samePath(current.path, fullPath)) return;
+
+      removeRoute(id);
+      routeOverlays.set(id, {
+        color,
+        path: fullPath,
+        overlays: addRoute(map, TMap, {
+          path: fullPath,
+          color,
+          lineWidth: 5
+        })
+      });
+    });
+
+    routeOverlays.forEach((_, id) => {
+      if (!desiredIds.has(id)) removeRoute(id);
+    });
   };
 
   const update = (orders = []) => {
-    const validOrders = orders.map((order) => ({ order, coordinate: validCoordinate(order.realtimeTrack) }))
-      .filter(({ coordinate }) => coordinate);
-    const currentIds = new Set(validOrders.map(({ order }) => order.orderNo).filter(Boolean));
-    histories.forEach((_, orderNo) => {
-      if (!currentIds.has(orderNo)) histories.delete(orderNo);
+    const mapped = orders.map((order, index) => {
+      const realtimeTrack = order.realtimeTrack || {};
+      const realtimePath = normalizeTrack(realtimeTrack.realtimeData);
+      const fullPath = normalizeTrack(realtimeTrack.allRouteData);
+      const id = order.orderNo || `order-${index}`;
+      const routeStart = fullPath[0] || null;
+      const routeEnd = fullPath.at(-1) || null;
+      const reportedStart = validOrderCoordinate(realtimeTrack.startPoint);
+      const reportedEnd = validOrderCoordinate(realtimeTrack.endPoint);
+      return {
+        id,
+        order,
+        realtimePath,
+        fullPath,
+        startCoordinate: resolveEndpoint(routeStart, reportedStart),
+        endCoordinate: resolveEndpoint(routeEnd, reportedEnd),
+        coordinate: realtimePath.at(-1) || null,
+        color: getRouteColor(order.orderNo, index),
+        completed: isCompleted(order)
+      };
     });
 
-    const mapped = validOrders.map(({ order, coordinate }, index) => {
-      const key = order.orderNo || `order-${index}`;
-      const path = histories.get(key) || [];
-      if (!path.length || distanceSquared(path[path.length - 1], coordinate) > 1e-12) {
-        path.push(coordinate);
-        if (path.length > MAX_TRACK_POINTS) path.shift();
-      }
-      histories.set(key, path);
-      return { order, coordinate, path, color: ROUTE_COLORS[index % ROUTE_COLORS.length] };
+    const activeOrders = mapped.filter(({ completed }) => !completed);
+    buildings.update(activeOrders.filter(({ fullPath }) => fullPath.length > 1)
+      .flatMap(({ id, order, startCoordinate, endCoordinate, color }) => [
+        {
+          id: `${id}:start`,
+          name: order.realtimeTrack?.startPoint?.name || order.communityProject,
+          coordinate: startCoordinate,
+          color
+        },
+        {
+          id: `${id}:end`,
+          name: order.realtimeTrack?.endPoint?.name || '终点',
+          coordinate: endCoordinate,
+          color
+        }
+      ]));
+
+    syncRoutes(activeOrders);
+
+    vehiclePositions = activeOrders.filter(({ coordinate }) => coordinate).map(({ id, coordinate, realtimePath }) => {
+      const previous = realtimePath.length > 1 ? realtimePath[realtimePath.length - 2] : null;
+      return {
+        id,
+        coordinate,
+        nextCoordinate: previous
+          ? [coordinate[0] + (coordinate[0] - previous[0]), coordinate[1] + (coordinate[1] - previous[1])]
+          : [coordinate[0] + 0.00001, coordinate[1]]
+      };
     });
-
-    clearOverlays();
-    if (mapped.length) {
-      const styles = {};
-      const geometries = mapped.map(({ order, coordinate, color }, index) => {
-        const styleId = `order-${index}`;
-        styles[styleId] = new TMap.MarkerStyle({
-          width: 156,
-          height: 62,
-          anchor: new TMap.Point(78, 60),
-          src: markerImage(order, color)
-        });
-        return { id: order.orderNo || `order-${index}`, position: new TMap.LatLng(coordinate[1], coordinate[0]), styleId };
-      });
-      markerOverlay = new TMap.MultiMarker({ map, styles, geometries });
-
-      mapped.filter(({ path }) => path.length > 1).forEach(({ path, color }) => {
-        const overlays = addRoute(map, TMap, { path, color });
-        setRouteProgress(overlays, path, 1);
-        routeOverlays.push(...overlays);
-      });
-    }
-
-    const latest = mapped
-      .filter(({ path }) => path.length)
-      .sort((left, right) => String(right.order.realtimeTrack?.updateTime || '').localeCompare(String(left.order.realtimeTrack?.updateTime || '')))[0];
-    if (!latest) {
-      latestVehiclePosition = null;
-      return;
-    }
-
-    const previous = latest.path.length > 1 ? latest.path[latest.path.length - 2] : null;
-    const point = latest.coordinate;
-    latestVehiclePosition = {
-      coordinate: point,
-      nextCoordinate: previous ? [point[0] + (point[0] - previous[0]), point[1] + (point[1] - previous[1])] : [point[0] + 0.00001, point[1]]
-    };
   };
 
   return {
     update,
-    getVehiclePosition: () => latestVehiclePosition,
+    getVehiclePositions: () => vehiclePositions,
     cleanup() {
-      clearOverlays();
-      histories.clear();
-      latestVehiclePosition = null;
+      clearRoutes();
+      buildings.cleanup();
+      vehiclePositions = [];
     }
   };
 }

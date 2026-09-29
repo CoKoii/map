@@ -11,6 +11,15 @@ export default defineConfig(({ mode }) => ({
     }
   },
   build: {
-    assetsInlineLimit: mode === 'single' ? Infinity : 0
+    assetsInlineLimit: mode === 'single' ? Infinity : 0,
+    rollupOptions: mode === 'single'
+      ? { output: { inlineDynamicImports: true } }
+      : {
+          output: {
+            manualChunks(id) {
+              if (id.includes('/node_modules/three/')) return 'three-vendor';
+            }
+          }
+        }
   }
 }));

@@ -1,13 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTruck } from '@fortawesome/free-solid-svg-icons';
+import boundaryData from '../data/kunshan-boundary-gcj02.json';
 import { loadTencentMap } from '../services/tencentMap';
 import { MAP_CONFIG } from '../config/map';
-import { getMapData } from '../services/mapData';
 import { addBoundaryLayers } from '../services/mapOverlays';
 import { createOrderMapTracking } from '../services/orderMapTracking';
-import { createPlacePresentation } from '../services/placePresentation';
-import { loadVehicleAnimation } from '../services/vehicleAnimation';
 
 function createMap(TMap, element) {
   return new TMap.Map(element, {
@@ -30,20 +26,47 @@ function createMap(TMap, element) {
   });
 }
 
-function loadScene({ TMap, map, mapData, canvas, overlays, vehicleIcon }) {
-  overlays.push(...addBoundaryLayers(map, TMap, mapData.boundary));
-  const placePresentation = createPlacePresentation({ TMap, map, places: mapData.places });
-  placePresentation.start();
+function loadScene({ TMap, map, boundary, canvas, overlays }) {
+  overlays.push(...addBoundaryLayers(map, TMap, boundary));
   const orderTracking = createOrderMapTracking({ TMap, map });
-  const vehicleAnimation = loadVehicleAnimation(TMap, map, canvas, [], vehicleIcon, {
-    positionProvider: orderTracking.getVehiclePosition
-  });
+  let vehicleAnimation;
+  let vehicleLoad;
+  let stopped = false;
+
+  const renderVehicles = () => {
+    if (vehicleAnimation) {
+      vehicleAnimation.render();
+      return;
+    }
+    if (stopped || vehicleLoad || !orderTracking.getVehiclePositions().length) return;
+
+    vehicleLoad = import('../services/vehicleAnimation')
+      .then(({ loadVehicleAnimation }) => {
+        if (stopped || !orderTracking.getVehiclePositions().length) {
+          vehicleLoad = null;
+          return;
+        }
+        vehicleAnimation = loadVehicleAnimation(TMap, map, canvas, orderTracking.getVehiclePositions);
+        vehicleAnimation.ready.catch(() => {
+          vehicleAnimation = null;
+          vehicleLoad = null;
+        });
+      })
+      .catch((error) => {
+        vehicleLoad = null;
+        console.info('3D vehicle module initialization failed', error);
+      });
+  };
+
   return {
-    updateOrders: orderTracking.update,
+    updateOrders(orders) {
+      orderTracking.update(orders);
+      renderVehicles();
+    },
     cleanup() {
+      stopped = true;
       orderTracking.cleanup();
-      vehicleAnimation.cleanup();
-      placePresentation.cleanup();
+      vehicleAnimation?.cleanup();
     }
   };
 }
@@ -56,7 +79,6 @@ function getMapErrorMessage(error) {
 export default function MapView({ orders }) {
   const mapElement = useRef(null);
   const vehicleCanvas = useRef(null);
-  const vehicleIcon = useRef(null);
   const orderTrackingRef = useRef(null);
   const ordersRef = useRef(orders);
   ordersRef.current = orders;
@@ -76,7 +98,6 @@ export default function MapView({ orders }) {
       try {
         const TMap = await loadTencentMap();
         if (cancelled) return;
-        const mapData = getMapData();
         map = createMap(TMap, mapElement.current);
         let sceneLoaded = false;
         map.on('idle', () => {
@@ -84,7 +105,7 @@ export default function MapView({ orders }) {
           sceneLoaded = true;
           if (cancelled) return;
           try {
-            orderTracking = loadScene({ TMap, map, mapData, canvas: vehicleCanvas.current, overlays, vehicleIcon: vehicleIcon.current });
+            orderTracking = loadScene({ TMap, map, boundary: boundaryData, canvas: vehicleCanvas.current, overlays });
             orderTrackingRef.current = orderTracking;
             orderTracking.updateOrders(ordersRef.current || []);
             if (cancelled) return;
@@ -112,13 +133,12 @@ export default function MapView({ orders }) {
 
   useEffect(() => {
     orderTrackingRef.current?.updateOrders(orders || []);
-  }, [orders, mapState.phase]);
+  }, [orders]);
 
   return (
     <section className="map-wrap" aria-label="昆山市装修垃圾收运订单实时定位与轨迹地图">
       <div id="map" ref={mapElement} />
       <canvas className="vehicle-layer" ref={vehicleCanvas} aria-hidden="true" />
-      <div className="vehicle-icon" ref={vehicleIcon} aria-hidden="true"><FontAwesomeIcon icon={faTruck} /></div>
       <div className="map-wash" />
       {!ready && <div className={`map-fallback ${hasError ? 'is-error' : ''}`}>
         <div className="loading-card">

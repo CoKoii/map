@@ -1,6 +1,7 @@
 import React from 'react';
 import MapView from './components/MapView';
-import DashboardOverlay, { DashboardHeader, useDashboardData } from './components/Dashboard';
+import DashboardOverlay, { DashboardHeader } from './components/Dashboard';
+import { useDashboardData } from './hooks/useDashboardData';
 
 export default function App() {
   const data = useDashboardData();

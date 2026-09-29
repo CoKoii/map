@@ -17,55 +17,9 @@ import {
   SERVICE_ITEMS,
   STAT_ITEMS,
 } from '../data/dashboardFixtures';
-import { fetchDashboardOrders, fetchDashboardOverview } from '../services/dashboardApi';
 
-const EXECUTION_FIELDS = ['pendingCount', 'inProgressCount', 'completedCount'];
-
-export function useDashboardData() {
-  const [overview, setOverview] = useState(null);
-  const [orders, setOrders] = useState(null);
-  const [overviewError, setOverviewError] = useState(false);
-  const [ordersError, setOrdersError] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    let controllers = [];
-
-    const refresh = () => {
-      controllers.forEach((controller) => controller.abort());
-      controllers = [new AbortController(), new AbortController()];
-      const [overviewController, ordersController] = controllers;
-
-      fetchDashboardOverview(overviewController.signal).then((data) => {
-        if (active) {
-          setOverview(data);
-          setOverviewError(false);
-        }
-      }).catch((error) => {
-        if (active && error.name !== 'AbortError') setOverviewError(true);
-      });
-
-      fetchDashboardOrders(ordersController.signal).then((data) => {
-        if (active) {
-          setOrders(Array.isArray(data.orderList) ? data.orderList : []);
-          setOrdersError(false);
-        }
-      }).catch((error) => {
-        if (active && error.name !== 'AbortError') setOrdersError(true);
-      });
-    };
-
-    refresh();
-    const timer = window.setInterval(refresh, 30000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-      controllers.forEach((controller) => controller.abort());
-    };
-  }, []);
-
-  return { overview, orders, overviewError, ordersError };
-}
+const CAROUSEL_INTERVAL = 2000;
+const numberFormatters = new Map();
 
 function useDataCarousel(itemCount, visibleCount) {
   const [startIndex, setStartIndex] = useState(0);
@@ -76,7 +30,7 @@ function useDataCarousel(itemCount, visibleCount) {
 
   useEffect(() => {
     if (itemCount <= visibleCount) return undefined;
-    const timer = window.setInterval(() => setStartIndex((current) => (current + 1) % itemCount), 2000);
+    const timer = window.setInterval(() => setStartIndex((current) => (current + 1) % itemCount), CAROUSEL_INTERVAL);
     return () => window.clearInterval(timer);
   }, [itemCount, visibleCount]);
 
@@ -91,12 +45,23 @@ function useDataCarousel(itemCount, visibleCount) {
 function displayNumber(value, fractionDigits = 0) {
   if (value === null || value === undefined || value === '') return '—';
   const number = Number(value);
-  return Number.isFinite(number)
-    ? number.toLocaleString('zh-CN', { maximumFractionDigits: fractionDigits })
-    : String(value);
+  if (!Number.isFinite(number)) return String(value);
+  if (!numberFormatters.has(fractionDigits)) {
+    numberFormatters.set(fractionDigits, new Intl.NumberFormat('zh-CN', { maximumFractionDigits: fractionDigits }));
+  }
+  return numberFormatters.get(fractionDigits).format(number);
 }
 
 const TRACKING_STEPS = ['预约提交', '车辆到场', '交付确认', '运输中', '到场回执'];
+
+function getOrderTimestamp({ realtimeTrack, orderLog, appointmentTime }) {
+  return realtimeTrack?.updateTime
+    || realtimeTrack?.realtimeData?.at(-1)?.GpsTime
+    || realtimeTrack?.realtimeData?.at(-1)?.gpsTime
+    || orderLog?.at(-1)?.createTime
+    || appointmentTime
+    || '';
+}
 
 function getTrackingStage(order) {
   if (!order) return -1;
@@ -165,19 +130,12 @@ export function DashboardHeader({ apiState }) {
 }
 
 function StatStrip({ overview }) {
-  const values = overview ? [
-    overview.monthlyCollectionWeight,
-    overview.monthlyCompletedTrips,
-    overview.servedCommunityCount,
-    overview.inServiceVehicleCount
-  ] : [];
-
   return (
     <section className="stat-strip" aria-label="运营指标">
-      {STAT_ITEMS.map(({ label, unit, icon }, index) => {
-        const value = values[index] === undefined ? '—' : displayNumber(values[index], index === 0 ? 2 : 0);
+      {STAT_ITEMS.map(({ label, unit, icon, field, fractionDigits = 0 }) => {
+        const value = displayNumber(overview?.[field], fractionDigits);
         return (
-          <div className="stat-item" key={label}>
+          <div className="stat-item" key={field}>
             <PageIcon name={icon} size={30} aria-hidden="true" />
             <div className="stat-copy"><span>{label}</span><strong>{value}<small>{unit}</small></strong></div>
           </div>
@@ -242,8 +200,8 @@ function ExecutionPanel({ execution }) {
   return (
     <Panel title="收运执行" meta="今日任务 · 单">
       <div className="execution-grid">
-        {EXECUTION_METRICS.map(({ icon, label }, index) => {
-          const value = execution ? displayNumber(execution[EXECUTION_FIELDS[index]]) : '—';
+        {EXECUTION_METRICS.map(({ icon, label, field }) => {
+          const value = displayNumber(execution?.[field]);
           return <div key={label}><PageIcon name={icon} size={28} aria-hidden="true" /><strong>{value}</strong><span>{label}</span></div>;
         })}
       </div>
@@ -252,7 +210,9 @@ function ExecutionPanel({ execution }) {
 }
 
 function TrackingPanel({ orders = [], loading, error }) {
-  const order = orders.slice().sort((left, right) => String(right.realtimeTrack?.updateTime || '').localeCompare(String(left.realtimeTrack?.updateTime || '')))[0];
+  const order = orders.reduce((latest, candidate) => (
+    !latest || getOrderTimestamp(candidate) > getOrderTimestamp(latest) ? candidate : latest
+  ), null);
   const currentStep = getTrackingStage(order);
   return (
     <Panel title="清运任务追踪" meta="全流程可查 · 实时记录" className="tracking-panel">

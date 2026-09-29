@@ -1,8 +1,8 @@
 export const STAT_ITEMS = [
-  { label: '本月收运量', unit: '吨', icon: 'recycle' },
-  { label: '本月完成车次', unit: '车次', icon: 'truck' },
-  { label: '服务小区', unit: '个', icon: 'building' },
-  { label: '当前在运车辆', unit: '辆', icon: 'truck' }
+  { field: 'monthlyCollectionWeight', fractionDigits: 2, label: '本月收运量', unit: '吨', icon: 'recycle' },
+  { field: 'monthlyCompletedTrips', label: '本月完成车次', unit: '车次', icon: 'truck' },
+  { field: 'servedCommunityCount', label: '服务小区', unit: '个', icon: 'building' },
+  { field: 'inServiceVehicleCount', label: '当前在运车辆', unit: '辆', icon: 'truck' }
 ];
 
 export const SERVICE_ITEMS = [
@@ -12,9 +12,9 @@ export const SERVICE_ITEMS = [
 ];
 
 export const EXECUTION_METRICS = [
-  { icon: 'file', label: '待派单' },
-  { icon: 'truck', label: '执行中' },
-  { icon: 'check', label: '已完成' }
+  { field: 'pendingCount', icon: 'file', label: '待派单' },
+  { field: 'inProgressCount', icon: 'truck', label: '执行中' },
+  { field: 'completedCount', icon: 'check', label: '已完成' }
 ];
 
 export const PROCESS_STEPS = [

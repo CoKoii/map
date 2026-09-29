@@ -1,15 +1,10 @@
-import { BUILDING_SPECS, INITIAL_BUILDING_SCALE } from '../config/map';
-import { getRoutePrefix } from '../utils/coordinates';
-import { faBuilding, faTree } from '@fortawesome/free-solid-svg-icons';
+import { BUILDING_SPEC, INITIAL_BUILDING_SCALE } from '../config/map';
 
-const LABEL_CARD_HEIGHT = 44;
-const PLACE_LABEL_HEIGHT = LABEL_CARD_HEIGHT + 4;
-const LABEL_CLEARANCE = 72;
-const LABEL_TEXT_FONT = '600 12px "Noto Sans SC", sans-serif';
-const LABEL_TEXT_X = 49;
-const LABEL_RIGHT_PADDING = 16;
-const MIN_LABEL_WIDTH = 112;
-const routeOverlayMetadata = new WeakMap();
+const PLACE_LABEL_HEIGHT = 20;
+const LABEL_CLEARANCE = 40;
+const LABEL_TEXT_FONT = '600 10px "Noto Sans SC", sans-serif';
+const LABEL_HORIZONTAL_PADDING = 8;
+const MIN_LABEL_WIDTH = 32;
 let nextRouteId = 1;
 let labelMeasureContext;
 
@@ -46,11 +41,6 @@ export function addBoundaryLayers(map, TMap, boundary) {
   return [glow, fill];
 }
 
-const PLACE_ICONS = {
-  building: faBuilding.icon,
-  tree: faTree.icon
-};
-
 function escapeXml(value) {
   return String(value).replace(/[<>&"']/g, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[character]);
 }
@@ -58,49 +48,44 @@ function escapeXml(value) {
 function getPlaceLabelWidth(name) {
   labelMeasureContext ||= document.createElement('canvas').getContext('2d');
   labelMeasureContext.font = LABEL_TEXT_FONT;
-  const textWidth = labelMeasureContext.measureText(name).width;
-  return Math.ceil(Math.max(MIN_LABEL_WIDTH, LABEL_TEXT_X + textWidth + LABEL_RIGHT_PADDING));
+  const label = String(name || '');
+  return Math.ceil(Math.max(MIN_LABEL_WIDTH, labelMeasureContext.measureText(label).width + LABEL_HORIZONTAL_PADDING * 2));
 }
 
-function placeIcon(place, width) {
-  const icon = PLACE_ICONS[place.icon] || PLACE_ICONS.building;
-  const [iconWidth, iconHeight, , , path] = icon;
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${PLACE_LABEL_HEIGHT}" viewBox="0 0 ${width} ${PLACE_LABEL_HEIGHT}">
-      <rect x="1" y="2" width="${width - 2}" height="${LABEL_CARD_HEIGHT}" rx="8" fill="#0c1d1d" fill-opacity=".96" stroke="${place.color}"/>
-      <circle cx="25" cy="24" r="16" fill="${place.color}"/>
-      <svg x="13" y="12" width="24" height="24" viewBox="0 0 ${iconWidth} ${iconHeight}"><path fill="#102629" d="${path}"/></svg>
-      <text x="${LABEL_TEXT_X}" y="29" fill="#fff1b8" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="600">${escapeXml(place.name)}</text>
-    </svg>`;
+function placeLabel(name, width) {
+  const text = String(name || '');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${PLACE_LABEL_HEIGHT}" viewBox="0 0 ${width} ${PLACE_LABEL_HEIGHT}"><text x="${width / 2}" y="14" fill="#f3f8f8" stroke="#071319" stroke-opacity=".88" stroke-width="2.5" paint-order="stroke" font-family="Noto Sans SC, sans-serif" font-size="10" font-weight="600" text-anchor="middle">${escapeXml(text)}</text></svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
-function getLabelPosition(map, TMap, location, verticalOffset) {
+function getLabelPosition(map, TMap, location) {
   const position = toLatLng(TMap, location);
   const point = map.projectToContainer(position);
   if (!point) return position;
-  const labelCenter = new TMap.Point(point.x, point.y - LABEL_CLEARANCE - verticalOffset - PLACE_LABEL_HEIGHT / 2 + 2);
+  const labelCenter = new TMap.Point(point.x, point.y - LABEL_CLEARANCE - PLACE_LABEL_HEIGHT / 2);
   return map.unprojectFromContainer(labelCenter) || position;
 }
 
-export function addPlaceHighlight(map, TMap, place, location) {
-  const labelWidth = getPlaceLabelWidth(place.name);
-  const verticalOffset = place.id === 'east-disposal-center' ? 40 : 0;
-  const marker = new TMap.MultiMarker({
-    map,
-    styles: { place: new TMap.MarkerStyle({
-      width: labelWidth,
-      height: PLACE_LABEL_HEIGHT,
-      anchor: new TMap.Point(labelWidth / 2, PLACE_LABEL_HEIGHT / 2),
-      src: placeIcon(place, labelWidth)
-    }) },
-    geometries: [{ id: `place-${place.id}`, position: getLabelPosition(map, TMap, location, verticalOffset), styleId: 'place' }]
+function createTextLabelStyle(TMap, name) {
+  const width = getPlaceLabelWidth(name);
+  return new TMap.MarkerStyle({
+    width,
+    height: PLACE_LABEL_HEIGHT,
+    anchor: new TMap.Point(width / 2, PLACE_LABEL_HEIGHT / 2),
+    src: placeLabel(name, width)
   });
-  return [marker];
+}
+
+export function addPlaceHighlight(map, TMap, place, location) {
+  return new TMap.MultiMarker({
+    map,
+    styles: { place: createTextLabelStyle(TMap, place.name) },
+    geometries: [{ id: `place-${place.id}`, position: getLabelPosition(map, TMap, location), styleId: 'place' }]
+  });
 }
 
 function buildingPath([longitude, latitude], spec) {
-  const center = [longitude + spec.x, latitude + spec.y];
+  const center = [longitude, latitude];
   return [
     [center[0] - spec.width, center[1] - spec.depth],
     [center[0] + spec.width * spec.eastScale, center[1] - spec.depth],
@@ -120,61 +105,35 @@ function buildingStyle(TMap, style, height) {
   });
 }
 
-export function addPlaceBuildings(map, TMap, location, buildingStyles) {
-  return BUILDING_SPECS.map((spec, index) => {
-    const style = buildingStyles[index];
-    const overlay = new TMap.MultiPolygon({
-      map,
-      geometries: [{ id: `building-${index}`, paths: buildingPath(location, spec).map((point) => toLatLng(TMap, point)), styleId: 'building' }],
-      styles: { building: buildingStyle(TMap, style, spec.height * INITIAL_BUILDING_SCALE) }
-    });
-    return { overlay, height: spec.height, TMap, style };
+export function addPlaceBuildings(map, TMap, location, style) {
+  const overlay = new TMap.MultiPolygon({
+    map,
+    geometries: [{ id: 'building', paths: buildingPath(location, BUILDING_SPEC).map((point) => toLatLng(TMap, point)), styleId: 'building' }],
+    styles: { building: buildingStyle(TMap, style, BUILDING_SPEC.height * INITIAL_BUILDING_SCALE) }
   });
+  return { overlay, height: BUILDING_SPEC.height, TMap, style };
 }
 
-export function setBuildingScale(buildings, scale) {
+export function setBuildingScale(building, scale) {
   const normalizedScale = Math.max(0, Math.min(1, scale));
-  buildings.forEach(({ overlay, height, TMap, style }) => {
-    overlay.setStyles({ building: buildingStyle(TMap, style, height * normalizedScale) });
-  });
+  const { overlay, height, TMap, style } = building;
+  overlay.setStyles({ building: buildingStyle(TMap, style, height * normalizedScale) });
 }
 
-export function removePlaceBuildings(buildings) {
-  buildings.forEach(({ overlay }) => overlay.setMap(null));
+export function removePlaceBuildings({ overlay }) {
+  overlay.setMap(null);
 }
 
 function addRouteLine(map, TMap, path, color, width, opacity) {
-  const linePath = path.length === 1
-    ? [path[0], [path[0][0] + 0.00001, path[0][1]]]
-    : path;
   const geometryId = `route-${nextRouteId++}`;
-  const overlay = new TMap.MultiPolyline({
+  return new TMap.MultiPolyline({
     map,
-    geometries: [{ id: geometryId, paths: linePath.map((point) => toLatLng(TMap, point)), styleId: 'route' }],
+    geometries: [{ id: geometryId, paths: path.map((point) => toLatLng(TMap, point)), styleId: 'route' }],
     styles: { route: new TMap.PolylineStyle({ color: toRgba(color, opacity), width }) }
   });
-  routeOverlayMetadata.set(overlay, { TMap, geometryId });
-  return overlay;
 }
 
-export function addRoute(map, TMap, route) {
-  const path = getRoutePrefix(route.path, 0);
-  return [
-    addRouteLine(map, TMap, path, route.color, 7, 0.28),
-    addRouteLine(map, TMap, path, route.color, 4, 0.96)
-  ];
-}
-
-export function setRouteProgress(routeOverlays, path, progress) {
-  const visiblePath = getRoutePrefix(path, progress);
-  const linePath = visiblePath.length === 1
-    ? [visiblePath[0], [visiblePath[0][0] + 0.00001, visiblePath[0][1]]]
-    : visiblePath;
-  const metadata = routeOverlayMetadata.get(routeOverlays[0]);
-  if (!metadata) return;
-  const paths = linePath.map((point) => toLatLng(metadata.TMap, point));
-  routeOverlays.forEach((overlay) => {
-    const { geometryId } = routeOverlayMetadata.get(overlay);
-    overlay.setGeometries([{ id: geometryId, paths, styleId: 'route' }]);
-  });
+export function addRoute(map, TMap, { path, color, lineWidth = 4, lineOpacity = 1 }) {
+  if (!Array.isArray(path) || path.length < 2) return [];
+  return [addRouteLine(map, TMap, path, color, lineWidth, lineOpacity)];
 }

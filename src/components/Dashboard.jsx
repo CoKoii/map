@@ -209,6 +209,16 @@ function ExecutionPanel({ execution }) {
   );
 }
 
+function CitySlogan() {
+  return (
+    <div className="city-slogan" aria-label="昆山 人文江南 宜居之城 KUNSHAN">
+      <strong>昆山</strong>
+      <span>人文江南 · 宜居之城</span>
+      <b>KUNSHAN</b>
+    </div>
+  );
+}
+
 function TrackingPanel({ orders = [], loading, error }) {
   const order = orders.reduce((latest, candidate) => (
     !latest || getOrderTimestamp(candidate) > getOrderTimestamp(latest) ? candidate : latest
@@ -256,7 +266,7 @@ export default function DashboardOverlay({ overview, orders, overviewError, orde
     <div className="dashboard-overlay">
       <StatStrip overview={overview?.overview} />
       <aside className="dashboard-rail dashboard-rail-left"><ServicePanel /><DistributionPanel regions={Array.isArray(overview?.regionCollection) ? overview.regionCollection : []} loading={!overview && !overviewError} error={overviewError} /></aside>
-      <aside className="dashboard-rail dashboard-rail-right"><ExecutionPanel execution={overview?.execution} /><TrackingPanel orders={orders || []} loading={!orders && !ordersError} error={ordersError} /></aside>
+      <aside className="dashboard-rail dashboard-rail-right"><CitySlogan /><ExecutionPanel execution={overview?.execution} /><TrackingPanel orders={orders || []} loading={!orders && !ordersError} error={ordersError} /></aside>
       <ProcessBar />
     </div>
   );

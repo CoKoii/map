@@ -1,5 +1,3 @@
-import React, { useEffect, useState } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faBuilding,
   faCircleCheck,
@@ -11,6 +9,8 @@ import {
   faTruck,
   faUser
 } from '@fortawesome/free-solid-svg-icons';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import React, { useEffect, useState } from 'react';
 import {
   EXECUTION_METRICS,
   PROCESS_STEPS,
@@ -95,7 +95,7 @@ export function DashboardHeader({ apiState }) {
   return (
     <header className="map-title">
       <div className="brand-lockup">
-        <div className="brand-mark">城建<span>绿和</span></div>
+        <a className="brand-mark" href="index.html#/view/9b6e20d5577083d771e8f13bdf0c3b33">城建<span>绿和</span></a>
         <div className="brand-sub">共建更美好的昆山</div>
         <div className="brand-hero">
           <div className="brand-hero-title"><span>收</span><span>运</span></div>

@@ -23,7 +23,7 @@ button { font: inherit; }
 
 .map-title { position: absolute; z-index: 10; top: 0; right: 0; left: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; padding: 20px 32px; pointer-events: none; isolation: isolate; }
 .brand-lockup { position: relative; z-index: 1; padding-top: 2px; }
-.brand-mark { font-size: 26px; font-weight: 800; letter-spacing: 2px; }
+.brand-mark { display: inline-block; color: inherit; font-size: 26px; font-weight: 800; letter-spacing: 2px; pointer-events: auto; text-decoration: none; }
 .brand-mark span { color: inherit; }
 .brand-sub { margin-top: -2px; color: var(--muted); font-size: 10px; letter-spacing: 3px; }
 .brand-hero, .brand-hero-title, .brand-hero-sub, .brand-hero-rule, .brand-hero-copy { display: none; }

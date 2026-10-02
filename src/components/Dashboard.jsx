@@ -11,6 +11,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import React, { useEffect, useState } from 'react';
+import constructionWasteBanner from '../assets/construction-waste-banner.png';
 import {
   EXECUTION_METRICS,
   PROCESS_STEPS,
@@ -239,8 +240,7 @@ function TrackingPanel({ orders = [], loading, error }) {
         ))}
       </div>
       <div className="tracking-media">
-        <div><strong>袋装装修垃圾</strong><span>规范收运　·　全程可查</span></div>
-        <PageIcon name="truck" size={58} aria-hidden="true" />
+        <img src={constructionWasteBanner} alt="袋装装修垃圾规范清运" />
       </div>
     </Panel>
   );

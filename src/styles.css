@@ -21,13 +21,13 @@ button { font: inherit; }
 .vehicle-layer { position: absolute; z-index: 4; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .map-wash { position: absolute; inset: 0; z-index: 2; pointer-events: none; background: radial-gradient(ellipse at 50% 48%, transparent 32%, rgba(4, 17, 22, 0.34) 72%, rgba(3, 11, 15, 0.8) 100%); }
 
-.map-title { position: absolute; z-index: 10; top: 0; right: 0; left: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; padding: 20px 32px; pointer-events: none; isolation: isolate; }
-.brand-lockup { position: relative; z-index: 1; padding-top: 2px; }
-.brand-mark { display: inline-block; color: inherit; font-size: 26px; font-weight: 800; letter-spacing: 2px; pointer-events: auto; text-decoration: none; }
+.map-title { position: absolute; z-index: 10; top: 0; right: 0; left: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; padding: 20px 32px; pointer-events: auto; isolation: isolate; }
+.brand-lockup { position: relative; z-index: 1; padding-top: 2px; pointer-events: auto; }
+.brand-mark { display: inline-block; color: inherit; cursor: pointer; font-size: 26px; font-weight: 800; letter-spacing: 2px; pointer-events: auto; text-decoration: none; }
 .brand-mark span { color: inherit; }
 .brand-sub { margin-top: -2px; color: var(--muted); font-size: 10px; letter-spacing: 3px; }
 .brand-hero, .brand-hero-title, .brand-hero-sub, .brand-hero-rule, .brand-hero-copy { display: none; }
-.title-lockup { position: relative; z-index: 1; text-align: center; }
+.title-lockup { position: relative; z-index: 1; pointer-events: none; text-align: center; }
 h1 { margin: 0; color: #f5f0df; font-size: clamp(28px, 2.5vw, 46px); line-height: 1.12; letter-spacing: 5px; text-shadow: 0 2px 15px rgba(255, 202, 109, 0.18); white-space: nowrap; }
 h1 em { color: #f5d28b; font-style: normal; }
 .header-ornament { position: absolute; z-index: 0; top: -17px; left: 50%; width: min(1424px, calc(100vw - 64px)); height: 32px; overflow: visible; pointer-events: none; transform: translateX(-50%); }
@@ -36,7 +36,7 @@ h1 em { color: #f5d28b; font-style: normal; }
 .title-rule { position: relative; display: flex; align-items: center; justify-content: center; margin-top: 7px; color: #fff; font-size: 12px; letter-spacing: 3px; }
 .title-rule b { position: relative; z-index: 1; color: #fff; font-weight: 500; white-space: nowrap; }
 .title-rule i { color: #65827f; font-style: normal; }
-.top-meta { position: relative; z-index: 1; padding-top: 4px; color: var(--muted); text-align: right; font-size: 11px; letter-spacing: 2px; line-height: 2; }
+.top-meta { position: relative; z-index: 1; padding-top: 4px; color: var(--muted); pointer-events: none; text-align: right; font-size: 11px; letter-spacing: 2px; line-height: 2; }
 .top-meta strong { color: #e9e3d0; font-size: 14px; letter-spacing: 2px; }
 .top-meta strong.api-state::before { display: inline-block; width: 7px; height: 7px; margin: 0 7px 1px 0; border-radius: 50%; background: #73d6ad; content: ''; }
 .top-meta strong.api-state.loading::before { background: #e6bf69; }

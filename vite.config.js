@@ -11,7 +11,8 @@ export default defineConfig(({ mode }) => ({
     }
   },
   build: {
-    assetsInlineLimit: mode === 'single' ? Infinity : 0,
+    // Keep binary assets such as the vehicle GLB next to the single HTML file.
+    assetsInlineLimit: 0,
     rollupOptions: mode === 'single'
       ? { output: { inlineDynamicImports: true } }
       : {

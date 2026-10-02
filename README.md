@@ -11,13 +11,19 @@ npm run dev -- --port 4173
 
 然后打开 `http://127.0.0.1:4173/`。
 
-生成可直接双击打开的单文件 HTML：
+生成 HTML 和外置 GLB 文件：
 
 ```bash
 npm run build:single
 ```
 
-生成文件为 `dist-single/kunshan-transport-dashboard.html`。文件已内嵌业务数据、边界、样式、脚本和车辆模型；地图底图仍需要网络和有效的腾讯地图 Key。
+生成文件为 `dist-single/kunshan-transport-dashboard.html`，车辆模型 `.glb` 与 HTML 位于同一目录，部署时需要一起提供；地图底图仍需要网络和有效的腾讯地图 Key。
+
+单文件模式会把业务接口改为直接请求 `http://139.196.108.216:9212/api/large/dashboard`，因此可以用浏览器双击 HTML 后请求实时数据。接口服务器必须允许文件来源的跨域请求（通常允许 `Origin: null`，或按接口安全策略允许 `*`）；否则浏览器会因 CORS 拦截响应，前端无法绕过这个限制。构建时可用 `VITE_DASHBOARD_API_BASE_URL` 覆盖该地址：
+
+```bash
+VITE_DASHBOARD_API_BASE_URL=https://your-api.example.com/api/large/dashboard npm run build:single
+```
 
 ## 验证
 

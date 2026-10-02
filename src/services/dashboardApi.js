@@ -1,4 +1,9 @@
-const API_BASE_URL = (import.meta.env.VITE_DASHBOARD_API_BASE_URL || '/api/large/dashboard').replace(/\/$/, '');
+// A file opened with double-click has no site origin and cannot use the Vite
+// proxy. The single-file build therefore points at the API server directly;
+// regular builds keep the same-origin path so they can use a reverse proxy.
+const configuredBaseUrl = import.meta.env.VITE_DASHBOARD_API_BASE_URL
+  || (import.meta.env.MODE === 'single' ? 'http://139.196.108.216:9212/api/large/dashboard' : '/api/large/dashboard');
+const API_BASE_URL = configuredBaseUrl.replace(/\/$/, '');
 
 async function getDashboardData(path, signal) {
   const response = await fetch(`${API_BASE_URL}/${path}`, {

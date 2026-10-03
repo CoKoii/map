@@ -20,7 +20,11 @@ import {
 } from '../data/dashboardFixtures';
 
 const CAROUSEL_INTERVAL = 2000;
-const numberFormatters = new Map();
+const numberFormatters = {
+  0: new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 }),
+  1: new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 }),
+  2: new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 })
+};
 
 function useDataCarousel(itemCount, visibleCount) {
   const [startIndex, setStartIndex] = useState(0);
@@ -44,31 +48,18 @@ function useDataCarousel(itemCount, visibleCount) {
 }
 
 function displayNumber(value, fractionDigits = 0) {
-  if (value === null || value === undefined || value === '') return '—';
-  const number = Number(value);
-  if (!Number.isFinite(number)) return String(value);
-  if (!numberFormatters.has(fractionDigits)) {
-    numberFormatters.set(fractionDigits, new Intl.NumberFormat('zh-CN', { maximumFractionDigits: fractionDigits }));
-  }
-  return numberFormatters.get(fractionDigits).format(number);
+  return numberFormatters[fractionDigits].format(value);
 }
 
 const TRACKING_STEPS = ['预约提交', '车辆到场', '交付确认', '运输中', '到场回执'];
 
-function getOrderTimestamp({ realtimeTrack, orderLog, appointmentTime }) {
-  return realtimeTrack?.updateTime
-    || realtimeTrack?.realtimeData?.at(-1)?.GpsTime
-    || realtimeTrack?.realtimeData?.at(-1)?.gpsTime
-    || orderLog?.at(-1)?.createTime
-    || appointmentTime
-    || '';
+function getOrderTimestamp({ orderLog }) {
+  return orderLog.at(-1).createTime;
 }
 
 function getTrackingStage(order) {
   if (!order) return -1;
-  const logs = order?.orderLog;
-  const lastLog = Array.isArray(logs) ? logs[logs.length - 1] : null;
-  const status = order.status || lastLog?.postStatusName || '';
+  const status = order.status;
   if (/回执|完成|联单确认/.test(status)) return 4;
   if (/运输/.test(status)) return 3;
   if (/交付/.test(status)) return 2;
@@ -134,7 +125,7 @@ function StatStrip({ overview }) {
   return (
     <section className="stat-strip" aria-label="运营指标">
       {STAT_ITEMS.map(({ label, unit, icon, field, fractionDigits = 0 }) => {
-        const value = displayNumber(overview?.[field], fractionDigits);
+        const value = overview ? displayNumber(overview[field], fractionDigits) : '—';
         return (
           <div className="stat-item" key={field}>
             <PageIcon name={icon} size={30} aria-hidden="true" />
@@ -177,17 +168,17 @@ function ServicePanel() {
   );
 }
 
-function DistributionPanel({ regions = [], loading, error }) {
+function DistributionPanel({ regions, loading, error }) {
   const carousel = useDataCarousel(regions.length, 4);
   const visibleRegions = carousel.visibleItems(regions);
-  const maxValue = Math.max(1, ...regions.map((item) => Number(item.collectionCount) || 0));
+  const maxValue = Math.max(1, ...regions.map((item) => Number(item.collectionCount)));
   return (
     <Panel title="区域收运分布" meta="完成车次 · 吨" className="carousel-panel">
       <div className="bar-list">
         {regions.length ? visibleRegions.map((item) => {
-          const count = Number(item.collectionCount) || 0;
-          return <div className="bar-row data-carousel-row" key={item.regionId ?? item.regionName}>
-            <span title={item.regionName}>{item.regionName || '未命名区域'}</span>
+          const count = Number(item.collectionCount);
+          return <div className="bar-row data-carousel-row" key={item.regionId}>
+            <span title={item.regionName}>{item.regionName}</span>
             <div className="bar-track"><i style={{ width: `${(count / maxValue) * 100}%` }} /></div>
             <b title={`${displayNumber(item.collectionWeight, 2)} 吨`}>{displayNumber(count)}<small>{displayNumber(item.collectionWeight, 1)} 吨</small></b>
           </div>;
@@ -202,7 +193,7 @@ function ExecutionPanel({ execution }) {
     <Panel title="收运执行" meta="今日任务 · 单">
       <div className="execution-grid">
         {EXECUTION_METRICS.map(({ icon, label, field }) => {
-          const value = displayNumber(execution?.[field]);
+          const value = execution ? displayNumber(execution[field]) : '—';
           return <div key={label}><PageIcon name={icon} size={28} aria-hidden="true" /><strong>{value}</strong><span>{label}</span></div>;
         })}
       </div>
@@ -220,7 +211,7 @@ function CitySlogan() {
   );
 }
 
-function TrackingPanel({ orders = [], loading, error }) {
+function TrackingPanel({ orders, loading, error }) {
   const order = orders.reduce((latest, candidate) => (
     !latest || getOrderTimestamp(candidate) > getOrderTimestamp(latest) ? candidate : latest
   ), null);
@@ -261,12 +252,13 @@ function ProcessBar() {
   );
 }
 
-export default function DashboardOverlay({ overview, orders, overviewError, ordersError }) {
+export default function DashboardOverlay({ overview, orders, loading, error }) {
+  const regions = overview ? overview.regionCollection : [];
   return (
     <div className="dashboard-overlay">
       <StatStrip overview={overview?.overview} />
-      <aside className="dashboard-rail dashboard-rail-left"><ServicePanel /><DistributionPanel regions={Array.isArray(overview?.regionCollection) ? overview.regionCollection : []} loading={!overview && !overviewError} error={overviewError} /></aside>
-      <aside className="dashboard-rail dashboard-rail-right"><CitySlogan /><ExecutionPanel execution={overview?.execution} /><TrackingPanel orders={orders || []} loading={!orders && !ordersError} error={ordersError} /></aside>
+      <aside className="dashboard-rail dashboard-rail-left"><ServicePanel /><DistributionPanel regions={regions} loading={loading} error={error} /></aside>
+      <aside className="dashboard-rail dashboard-rail-right"><CitySlogan /><ExecutionPanel execution={overview?.execution} /><TrackingPanel orders={orders} loading={loading} error={error} /></aside>
       <ProcessBar />
     </div>
   );

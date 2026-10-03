@@ -1,12 +1,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { VEHICLE_CONFIG } from '../config/map';
 
 function getMapPixel(map, TMap, coordinate) {
   const latLng = new TMap.LatLng(coordinate[1], coordinate[0]);
-  const pixel = map.projectToContainer?.(latLng);
-  if (!pixel) return null;
-  if (Array.isArray(pixel)) return pixel;
+  const pixel = map.projectToContainer(latLng);
   return [pixel.x, pixel.y];
 }
 
@@ -34,13 +33,6 @@ function disposeObject(root) {
 }
 
 export function loadVehicleAnimation(TMap, map, canvas, positionProvider) {
-  if (!canvas || typeof positionProvider !== 'function') {
-    return {
-      cleanup: () => {},
-      ready: Promise.resolve(false)
-    };
-  }
-
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance' });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -51,16 +43,15 @@ export function loadVehicleAnimation(TMap, map, canvas, positionProvider) {
   keyLight.position.set(-200, -300, 500);
   scene.add(ambientLight, keyLight);
 
-  let vehicle;
+  let vehicleTemplate;
   const vehicles = new Map();
   let stopped = false;
   let resizeObserver;
-  let loadRequest;
   let renderVehicles = () => {};
 
   const resize = () => {
-    const width = canvas.clientWidth || canvas.parentElement.clientWidth;
-    const height = canvas.clientHeight || canvas.parentElement.clientHeight;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
     renderer.setSize(width, height, false);
     camera.right = width;
     camera.top = height;
@@ -69,10 +60,8 @@ export function loadVehicleAnimation(TMap, map, canvas, positionProvider) {
     renderVehicles();
   };
   resize();
-  if (typeof ResizeObserver !== 'undefined') {
-    resizeObserver = new ResizeObserver(resize);
-    resizeObserver.observe(canvas);
-  }
+  resizeObserver = new ResizeObserver(resize);
+  resizeObserver.observe(canvas);
 
   const setVehiclePosition = (root, point, nextPoint) => {
     const screenPoint = getMapPixel(map, TMap, point);
@@ -86,36 +75,35 @@ export function loadVehicleAnimation(TMap, map, canvas, positionProvider) {
   const cleanup = () => {
     if (stopped) return;
     stopped = true;
-    loadRequest?.abort?.();
     resizeObserver?.disconnect();
     vehicles.forEach(({ root }) => {
       scene.remove(root);
       root.clear();
     });
     vehicles.clear();
-    if (vehicle) disposeObject(vehicle);
+    if (vehicleTemplate) disposeObject(vehicleTemplate);
     renderer.dispose();
   };
 
   const ready = new Promise((resolve, reject) => {
     const loader = new GLTFLoader();
-    loadRequest = loader.load(VEHICLE_CONFIG.modelUrl, (gltf) => {
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    loader.load(VEHICLE_CONFIG.modelUrl, (gltf) => {
       if (stopped) {
         disposeObject(gltf.scene);
         resolve(false);
         return;
       }
-      vehicle = gltf.scene;
-      vehicle.scale.setScalar(VEHICLE_CONFIG.scale);
-      vehicle.rotation.set(Math.PI / 2, 0, 0);
-      vehicle.traverse((node) => {
+      vehicleTemplate = gltf.scene;
+      vehicleTemplate.rotation.set(Math.PI / 2, 0, 0);
+      vehicleTemplate.traverse((node) => {
         if (!node.isMesh) return;
         node.castShadow = false;
         node.receiveShadow = false;
       });
       renderVehicles = () => {
-        if (stopped || !vehicle) return;
-        const positions = positionProvider() || [];
+        if (stopped || !vehicleTemplate) return;
+        const positions = positionProvider();
         const visibleIds = new Set();
         positions.forEach(({ id, coordinate, nextCoordinate }) => {
           if (!coordinate) return;
@@ -124,7 +112,7 @@ export function loadVehicleAnimation(TMap, map, canvas, positionProvider) {
           let instance = vehicles.get(key);
           if (!instance) {
             const root = new THREE.Group();
-            const model = vehicle.clone(true);
+            const model = vehicleTemplate.clone(true);
             model.scale.setScalar(VEHICLE_CONFIG.scale);
             model.rotation.set(Math.PI / 2, 0, 0);
             root.rotation.x = THREE.MathUtils.degToRad(-VEHICLE_CONFIG.pitch);
@@ -133,7 +121,7 @@ export function loadVehicleAnimation(TMap, map, canvas, positionProvider) {
             instance = { root };
             vehicles.set(key, instance);
           }
-          setVehiclePosition(instance.root, coordinate, nextCoordinate || [coordinate[0] + 0.00001, coordinate[1]]);
+          setVehiclePosition(instance.root, coordinate, nextCoordinate);
         });
         vehicles.forEach(({ root }, id) => {
           if (visibleIds.has(id)) return;
@@ -148,9 +136,5 @@ export function loadVehicleAnimation(TMap, map, canvas, positionProvider) {
     }, undefined, reject);
   });
 
-  ready.catch((error) => {
-    cleanup();
-    console.info('3D vehicle model initialization failed', error);
-  });
   return { cleanup, ready, render: () => renderVehicles() };
 }

@@ -1,22 +1,10 @@
 import { useEffect, useState } from 'react';
 import { fetchDashboardOrders, fetchDashboardOverview } from '../services/dashboardApi';
 
-const REFRESH_INTERVAL = 15_000;
-
-function applyResult(result, setData, setError) {
-  if (result.status === 'fulfilled') {
-    setData(result.value);
-    setError(false);
-  } else if (result.reason?.name !== 'AbortError') {
-    setError(true);
-  }
-}
+const REFRESH_INTERVAL = 30_000;
 
 export function useDashboardData() {
-  const [overview, setOverview] = useState(null);
-  const [orders, setOrders] = useState(null);
-  const [overviewError, setOverviewError] = useState(false);
-  const [ordersError, setOrdersError] = useState(false);
+  const [data, setData] = useState({ overview: null, orders: [], loading: true, error: null });
 
   useEffect(() => {
     let active = true;
@@ -28,14 +16,17 @@ export function useDashboardData() {
       controller = new AbortController();
       const currentRequestId = ++requestId;
       const { signal } = controller;
-      const results = await Promise.allSettled([
-        fetchDashboardOverview(signal),
-        fetchDashboardOrders(signal)
-      ]);
-
-      if (!active || currentRequestId !== requestId) return;
-      applyResult(results[0], setOverview, setOverviewError);
-      applyResult(results[1], (data) => setOrders(Array.isArray(data.orderList) ? data.orderList : []), setOrdersError);
+      try {
+        const [overview, orders] = await Promise.all([
+          fetchDashboardOverview(signal),
+          fetchDashboardOrders(signal)
+        ]);
+        if (!active || currentRequestId !== requestId) return;
+        setData({ overview, orders: orders.orderList, loading: false, error: null });
+      } catch (error) {
+        if (!active || currentRequestId !== requestId || error.name === 'AbortError') return;
+        setData((current) => ({ ...current, loading: false, error }));
+      }
     };
 
     refresh();
@@ -48,5 +39,5 @@ export function useDashboardData() {
     };
   }, []);
 
-  return { overview, orders, overviewError, ordersError };
+  return data;
 }

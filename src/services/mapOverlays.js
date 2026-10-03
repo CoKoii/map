@@ -48,12 +48,12 @@ function escapeXml(value) {
 function getPlaceLabelWidth(name) {
   labelMeasureContext ||= document.createElement('canvas').getContext('2d');
   labelMeasureContext.font = LABEL_TEXT_FONT;
-  const label = String(name || '');
+  const label = String(name);
   return Math.ceil(Math.max(MIN_LABEL_WIDTH, labelMeasureContext.measureText(label).width + LABEL_HORIZONTAL_PADDING * 2));
 }
 
 function placeLabel(name, width) {
-  const text = String(name || '');
+  const text = String(name);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${PLACE_LABEL_HEIGHT}" viewBox="0 0 ${width} ${PLACE_LABEL_HEIGHT}"><text x="${width / 2}" y="14" fill="#f3f8f8" stroke="#071319" stroke-opacity=".88" stroke-width="2.5" paint-order="stroke" font-family="Noto Sans SC, sans-serif" font-size="10" font-weight="600" text-anchor="middle">${escapeXml(text)}</text></svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
@@ -133,7 +133,6 @@ function addRouteLine(map, TMap, path, color, width, opacity) {
   });
 }
 
-export function addRoute(map, TMap, { path, color, lineWidth = 4, lineOpacity = 1 }) {
-  if (!Array.isArray(path) || path.length < 2) return [];
+export function addRoute(map, TMap, { path, color, lineWidth, lineOpacity }) {
   return [addRouteLine(map, TMap, path, color, lineWidth, lineOpacity)];
 }

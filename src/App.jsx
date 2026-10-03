@@ -5,15 +5,14 @@ import { useDashboardData } from './hooks/useDashboardData';
 
 export default function App() {
   const data = useDashboardData();
-  const apiState = !data.overview && !data.orders ? (data.overviewError || data.ordersError ? 'error' : 'loading')
-    : data.overviewError || data.ordersError ? 'error' : 'connected';
+  const apiState = data.loading ? 'loading' : data.error ? 'error' : 'connected';
 
   return (
     <main className="map-app">
       <MapView orders={data.orders} />
       <div className="map-global-mask" aria-hidden="true" />
       <DashboardHeader apiState={apiState} />
-      <DashboardOverlay {...data} />
+      <DashboardOverlay overview={data.overview} orders={data.orders} loading={data.loading} error={data.error} />
     </main>
   );
 }

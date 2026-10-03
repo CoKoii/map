@@ -46,7 +46,7 @@ export function createOrderBuildings({ TMap, map }) {
   const create = ({ id, name, coordinate }, index) => {
     const place = {
       id: `order-${id}`,
-      name: name || id,
+      name,
       coordinates: coordinate
     };
     const marker = addPlaceHighlight(map, TMap, place, coordinate);
@@ -57,13 +57,13 @@ export function createOrderBuildings({ TMap, map }) {
   };
 
   return {
-    update(items = []) {
+    update(items) {
       if (stopped) return;
       const desired = new Map(items.filter((item) => item.coordinate).map((item) => [String(item.id), item]));
 
       desired.forEach((item, key) => {
         let visual = visuals.get(key);
-        const changed = visual && (visual.place.name !== (item.name || key)
+        const changed = visual && (visual.place.name !== item.name
           || visual.place.coordinates[0] !== item.coordinate[0]
           || visual.place.coordinates[1] !== item.coordinate[1]);
         if (changed) {

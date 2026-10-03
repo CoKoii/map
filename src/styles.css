@@ -122,13 +122,10 @@ h1 em { color: #f5d28b; font-style: normal; }
 .process-step b { overflow: visible; font-size: 12px; font-weight: 500; white-space: nowrap; }
 .process-bar > i { color: #d2a859; font-size: 25px; font-style: normal; line-height: 1; text-align: center; }
 
-.map-fallback { position: absolute; z-index: 20; inset: 0; display: grid; place-items: center; background: rgba(5, 17, 22, 0.96); color: rgba(226, 235, 220, 0.92); text-align: center; pointer-events: none; }
-.map-fallback.is-error { pointer-events: auto; }
+.map-status { position: absolute; z-index: 20; inset: 0; display: grid; place-items: center; background: rgba(5, 17, 22, 0.96); color: rgba(226, 235, 220, 0.92); text-align: center; }
 .loading-card { display: grid; justify-items: center; gap: 12px; }
 .loading-card strong { font-size: 15px; font-weight: 500; letter-spacing: 1px; }
 .loading-card small { color: rgba(154, 184, 173, 0.75); font-size: 11px; letter-spacing: 1px; }
-.map-retry { min-width: 96px; padding: 8px 17px; border: 1px solid rgba(118, 224, 192, 0.72); border-radius: 6px; background: rgba(20, 63, 63, 0.75); color: #b8f1dc; cursor: pointer; font-size: 12px; }
-.map-retry:hover { background: rgba(34, 89, 83, 0.88); }
 .loading-spinner { width: 26px; height: 26px; border: 2px solid rgba(255, 210, 119, 0.24); border-top-color: #ffd477; border-radius: 50%; animation: loading-spin 0.9s linear infinite; }
 @keyframes loading-spin { to { transform: rotate(360deg); } }
 

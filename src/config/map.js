@@ -1,4 +1,4 @@
-import vehicleModelUrl from '../assets/collection-car.optimized.glb?url';
+import vehicleModelUrl from '../assets/car.glb?url';
 
 export const MAP_CONFIG = {
   center: [120.96, 31.34],

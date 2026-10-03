@@ -11,7 +11,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import React, { useEffect, useState } from 'react';
-import constructionWasteBanner from '../assets/construction-waste-banner.png';
+import constructionWasteBanner from '../assets/construction-waste-banner.webp';
 import { ROTATION_INTERVAL } from '../config/map';
 import {
   EXECUTION_METRICS,

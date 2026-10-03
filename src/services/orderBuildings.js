@@ -2,7 +2,6 @@ import { BUILDING_PALETTES, INITIAL_BUILDING_SCALE } from '../config/map';
 import { addPlaceBuildings, addPlaceHighlight, removePlaceBuildings, setBuildingScale } from './mapOverlays';
 
 const APPEAR_DURATION = 900;
-const REMOVE_DURATION = 650;
 const BUILDING_STYLES = Object.values(BUILDING_PALETTES);
 
 export function createOrderBuildings({ TMap, map }) {
@@ -53,7 +52,7 @@ export function createOrderBuildings({ TMap, map }) {
     const style = BUILDING_STYLES[index % BUILDING_STYLES.length];
     const buildings = addPlaceBuildings(map, TMap, coordinate, style);
     setBuildingScale(buildings, INITIAL_BUILDING_SCALE);
-    return { marker, buildings, scale: INITIAL_BUILDING_SCALE, animationToken: 0, frameId: null, removing: false, place };
+    return { marker, buildings, scale: INITIAL_BUILDING_SCALE, animationToken: 0, frameId: null, place };
   };
 
   return {
@@ -74,17 +73,12 @@ export function createOrderBuildings({ TMap, map }) {
           visual = create({ ...item, id: key }, visuals.size);
           visuals.set(key, visual);
           animate(key, visual, 1, APPEAR_DURATION);
-        } else if (visual.removing) {
-          visual.removing = false;
-          visual.marker.setMap(map);
-          animate(key, visual, 1, APPEAR_DURATION);
         }
       });
 
       visuals.forEach((visual, key) => {
-        if (desired.has(key) || visual.removing) return;
-        visual.removing = true;
-        animate(key, visual, 0, REMOVE_DURATION, () => destroy(key, visual));
+        if (desired.has(key)) return;
+        destroy(key, visual);
       });
     },
     cleanup() {

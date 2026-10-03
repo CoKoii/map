@@ -1,10 +1,10 @@
 import { BUILDING_SPEC, INITIAL_BUILDING_SCALE } from '../config/map';
 
-const PLACE_LABEL_HEIGHT = 20;
-const LABEL_CLEARANCE = 40;
-const LABEL_TEXT_FONT = '600 10px "Noto Sans SC", sans-serif';
-const LABEL_HORIZONTAL_PADDING = 8;
-const MIN_LABEL_WIDTH = 32;
+const PLACE_LABEL_HEIGHT = 28;
+const LABEL_CLEARANCE = 72;
+const LABEL_TEXT_FONT = '700 12px "Noto Sans SC", sans-serif';
+const LABEL_HORIZONTAL_PADDING = 16;
+const MIN_LABEL_WIDTH = 110;
 let nextRouteId = 1;
 let labelMeasureContext;
 
@@ -54,7 +54,11 @@ function getPlaceLabelWidth(name) {
 
 function placeLabel(name, width) {
   const text = String(name);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${PLACE_LABEL_HEIGHT}" viewBox="0 0 ${width} ${PLACE_LABEL_HEIGHT}"><text x="${width / 2}" y="14" fill="#f3f8f8" stroke="#071319" stroke-opacity=".88" stroke-width="2.5" paint-order="stroke" font-family="Noto Sans SC, sans-serif" font-size="10" font-weight="600" text-anchor="middle">${escapeXml(text)}</text></svg>`;
+  const center = width / 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${PLACE_LABEL_HEIGHT}" viewBox="0 0 ${width} ${PLACE_LABEL_HEIGHT}">
+    <rect x="1" y="1" width="${width - 2}" height="26" rx="7" fill="#0b171b" fill-opacity=".96" stroke="#d1a957" stroke-width="1"/>
+    <text x="${center}" y="19" fill="#f5d98f" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" text-anchor="middle">${escapeXml(text)}</text>
+  </svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
@@ -99,7 +103,7 @@ function buildingStyle(TMap, style, height) {
   return new TMap.ExtrudablePolygonStyle({
     color: toRgba(style.fillColor, 0.98),
     borderColor: toRgba(style.roofColor, 0.9),
-    borderWidth: 1.5,
+    borderWidth: 2.5,
     showBorder: true,
     extrudeHeight: Math.max(1, height)
   });
@@ -129,7 +133,17 @@ function addRouteLine(map, TMap, path, color, width, opacity) {
   return new TMap.MultiPolyline({
     map,
     geometries: [{ id: geometryId, paths: path.map((point) => toLatLng(TMap, point)), styleId: 'route' }],
-    styles: { route: new TMap.PolylineStyle({ color: toRgba(color, opacity), width }) }
+    styles: {
+      route: new TMap.PolylineStyle({
+        color: toRgba(color, opacity),
+        width,
+        borderWidth: 2,
+        borderColor: 'rgba(30, 27, 19, 0.9)',
+        lineCap: 'round',
+        showArrow: true,
+        arrowOptions: { width: 12, height: 9, space: 72, align: 'middle', animSpeed: 0 }
+      })
+    }
   });
 }
 

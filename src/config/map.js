@@ -10,11 +10,13 @@ export const MAP_CONFIG = {
 };
 
 export const INITIAL_BUILDING_SCALE = 0.025;
+export const ROTATION_INTERVAL = 2000;
+export const ROUTE_ROTATION_INTERVAL = 10000;
 
 export const BUILDING_SPEC = {
-  width: 0.006,
-  depth: 0.0042,
-  height: 3400,
+  width: 0.009,
+  depth: 0.0064,
+  height: 5200,
   eastScale: 0.82,
   northScale: 0.64
 };
@@ -27,7 +29,7 @@ export const BUILDING_PALETTES = {
 
 export const VEHICLE_CONFIG = {
   modelUrl: vehicleModelUrl,
-  scale: 40,
+  scale: 54,
   pitch: MAP_CONFIG.pitch,
   forwardOffset: Math.PI / 2
 };

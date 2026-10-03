@@ -1,7 +1,8 @@
 import { addRoute } from './mapOverlays';
 import { createOrderBuildings } from './orderBuildings';
+import { ROUTE_ROTATION_INTERVAL } from '../config/map';
 
-const ROUTE_COLORS = ['#58f2c7', '#ffe45e', '#47d7ff', '#ff8b62'];
+const ROUTE_COLOR = '#ffd477';
 const COMPLETED_STATUSES = new Set(['10013040', '10013160', '10013180']);
 
 function validCoordinate(track) {
@@ -35,16 +36,13 @@ function normalizeTrack(points) {
   }, []);
 }
 
-function getRouteColor(orderId) {
-  let hash = 0;
-  for (const character of String(orderId)) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-  return ROUTE_COLORS[hash % ROUTE_COLORS.length];
-}
-
-export function createOrderMapTracking({ TMap, map }) {
+export function createOrderMapTracking({ TMap, map, onChange }) {
   const buildings = createOrderBuildings({ TMap, map });
   const routeOverlays = new Map();
+  let activeOrders = [];
+  let activeIndex = 0;
   let vehiclePositions = [];
+  let rotationTimer;
 
   const removeRoute = (id) => {
     routeOverlays.get(id)?.overlays.forEach((overlay) => overlay.setMap(null));
@@ -64,19 +62,18 @@ export function createOrderMapTracking({ TMap, map }) {
   const syncRoutes = (orders) => {
     const desiredIds = new Set();
 
-    orders.forEach(({ id, fullPath, color }) => {
+    orders.forEach(({ id, fullPath }) => {
       if (fullPath.length < 2) return;
       desiredIds.add(id);
       const current = routeOverlays.get(id);
-      if (current?.color === color && samePath(current.path, fullPath)) return;
+      if (current && samePath(current.path, fullPath)) return;
 
       removeRoute(id);
       routeOverlays.set(id, {
-        color,
         path: fullPath,
         overlays: addRoute(map, TMap, {
           path: fullPath,
-          color,
+          color: ROUTE_COLOR,
           lineWidth: 5,
           lineOpacity: 1
         })
@@ -88,8 +85,43 @@ export function createOrderMapTracking({ TMap, map }) {
     });
   };
 
+  const showActiveOrder = () => {
+    const order = activeOrders[activeIndex];
+    if (!order) {
+      syncRoutes([]);
+      buildings.update([]);
+      vehiclePositions = [];
+      onChange();
+      return;
+    }
+
+    syncRoutes([order]);
+    buildings.update([
+      {
+        id: `${order.id}:start`,
+        name: order.order.realtimeTrack.startPoint.name,
+        coordinate: order.startCoordinate
+      },
+      {
+        id: `${order.id}:end`,
+        name: order.order.realtimeTrack.endPoint.name,
+        coordinate: order.endCoordinate
+      }
+    ]);
+    vehiclePositions = order.realtimePath.length > 1 ? [{
+      id: order.id,
+      coordinate: order.coordinate,
+      nextCoordinate: [
+        order.coordinate[0] + order.coordinate[0] - order.realtimePath.at(-2)[0],
+        order.coordinate[1] + order.coordinate[1] - order.realtimePath.at(-2)[1]
+      ]
+    }] : [];
+    onChange();
+  };
+
   const update = (orders) => {
-    const mapped = orders.map((order) => {
+    const currentOrderId = activeOrders[activeIndex]?.id;
+    activeOrders = orders.map((order) => {
       const { realtimeTrack } = order;
       const realtimePath = normalizeTrack(realtimeTrack.realtimeData);
       const fullPath = normalizeTrack(realtimeTrack.allRouteData);
@@ -102,46 +134,33 @@ export function createOrderMapTracking({ TMap, map }) {
         startCoordinate: validOrderCoordinate(realtimeTrack.startPoint),
         endCoordinate: validOrderCoordinate(realtimeTrack.endPoint),
         coordinate: realtimePath.at(-1),
-        color: getRouteColor(order.orderNo),
         completed: isCompleted(order)
       };
-    });
+    }).filter(({ completed, fullPath }) => !completed && fullPath.length > 1);
 
-    const activeOrders = mapped.filter(({ completed }) => !completed);
-    buildings.update(activeOrders.filter(({ fullPath }) => fullPath.length > 1)
-      .flatMap(({ id, order, startCoordinate, endCoordinate, color }) => [
-        {
-          id: `${id}:start`,
-          name: order.realtimeTrack.startPoint.name,
-          coordinate: startCoordinate,
-          color
-        },
-        {
-          id: `${id}:end`,
-          name: order.realtimeTrack.endPoint.name,
-          coordinate: endCoordinate,
-          color
-        }
-      ]));
+    if (activeOrders.length > 1 && !rotationTimer) {
+      rotationTimer = window.setInterval(() => {
+        activeIndex = (activeIndex + 1) % activeOrders.length;
+        showActiveOrder();
+      }, ROUTE_ROTATION_INTERVAL);
+    } else if (activeOrders.length < 2 && rotationTimer) {
+      window.clearInterval(rotationTimer);
+      rotationTimer = undefined;
+    }
 
-    syncRoutes(activeOrders);
-
-    vehiclePositions = activeOrders.filter(({ realtimePath }) => realtimePath.length > 1).map(({ id, coordinate, realtimePath }) => {
-      const previous = realtimePath[realtimePath.length - 2];
-      return {
-        id,
-        coordinate,
-        nextCoordinate: [coordinate[0] + (coordinate[0] - previous[0]), coordinate[1] + (coordinate[1] - previous[1])]
-      };
-    });
+    const currentIndex = activeOrders.findIndex(({ id }) => id === currentOrderId);
+    activeIndex = currentIndex === -1 ? 0 : currentIndex;
+    showActiveOrder();
   };
 
   return {
     update,
     getVehiclePositions: () => vehiclePositions,
     cleanup() {
+      window.clearInterval(rotationTimer);
       clearRoutes();
       buildings.cleanup();
+      activeOrders = [];
       vehiclePositions = [];
     }
   };

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchDashboardOrders, fetchDashboardOverview } from '../services/dashboardApi';
 
-const REFRESH_INTERVAL = 30_000;
+const REFRESH_INTERVAL = 15_000;
 
 export function useDashboardData() {
   const [data, setData] = useState({ overview: null, orders: [], loading: true, error: null });

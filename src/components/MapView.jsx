@@ -29,8 +29,10 @@ function createMap(TMap, element) {
 
 function loadScene({ TMap, map, boundary, canvas, overlays, onVehicleError }) {
   overlays.push(...addBoundaryLayers(map, TMap, boundary));
-  const orderTracking = createOrderMapTracking({ TMap, map });
+  let renderVehicles = () => {};
+  const orderTracking = createOrderMapTracking({ TMap, map, onChange: () => renderVehicles() });
   const vehicleAnimation = loadVehicleAnimation(TMap, map, canvas, orderTracking.getVehiclePositions);
+  renderVehicles = vehicleAnimation.render;
   vehicleAnimation.ready.catch(onVehicleError);
 
   return {

@@ -12,6 +12,7 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import React, { useEffect, useState } from 'react';
 import constructionWasteBanner from '../assets/construction-waste-banner.png';
+import { ROTATION_INTERVAL } from '../config/map';
 import {
   EXECUTION_METRICS,
   PROCESS_STEPS,
@@ -19,7 +20,6 @@ import {
   STAT_ITEMS,
 } from '../data/dashboardFixtures';
 
-const CAROUSEL_INTERVAL = 2000;
 const numberFormatters = {
   0: new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 }),
   1: new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 }),
@@ -35,7 +35,7 @@ function useDataCarousel(itemCount, visibleCount) {
 
   useEffect(() => {
     if (itemCount <= visibleCount) return undefined;
-    const timer = window.setInterval(() => setStartIndex((current) => (current + 1) % itemCount), CAROUSEL_INTERVAL);
+    const timer = window.setInterval(() => setStartIndex((current) => (current + 1) % itemCount), ROTATION_INTERVAL);
     return () => window.clearInterval(timer);
   }, [itemCount, visibleCount]);
 

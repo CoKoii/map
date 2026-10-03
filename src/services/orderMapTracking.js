@@ -38,20 +38,15 @@ function normalizeTrack(points) {
 
 export function createOrderMapTracking({ TMap, map, onChange }) {
   const buildings = createOrderBuildings({ TMap, map });
-  const routeOverlays = new Map();
+  let routeOverlay;
   let activeOrders = [];
   let activeIndex = 0;
   let vehiclePositions = [];
   let rotationTimer;
 
-  const removeRoute = (id) => {
-    routeOverlays.get(id)?.overlays.forEach((overlay) => overlay.setMap(null));
-    routeOverlays.delete(id);
-  };
-
-  const clearRoutes = () => {
-    routeOverlays.forEach(({ overlays }) => overlays.forEach((overlay) => overlay.setMap(null)));
-    routeOverlays.clear();
+  const clearRoute = () => {
+    routeOverlay?.overlays.forEach((overlay) => overlay.setMap(null));
+    routeOverlay = undefined;
   };
 
   const samePath = (left, right) => left.length === right.length
@@ -59,43 +54,37 @@ export function createOrderMapTracking({ TMap, map, onChange }) {
       longitude === right[index][0] && latitude === right[index][1]
     ));
 
-  const syncRoutes = (orders) => {
-    const desiredIds = new Set();
+  const syncRoute = (order) => {
+    if (!order || order.fullPath.length < 2) {
+      clearRoute();
+      return;
+    }
+    if (routeOverlay?.id === order.id && samePath(routeOverlay.path, order.fullPath)) return;
 
-    orders.forEach(({ id, fullPath }) => {
-      if (fullPath.length < 2) return;
-      desiredIds.add(id);
-      const current = routeOverlays.get(id);
-      if (current && samePath(current.path, fullPath)) return;
-
-      removeRoute(id);
-      routeOverlays.set(id, {
-        path: fullPath,
-        overlays: addRoute(map, TMap, {
-          path: fullPath,
-          color: ROUTE_COLOR,
-          lineWidth: 5,
-          lineOpacity: 1
-        })
-      });
-    });
-
-    routeOverlays.forEach((_, id) => {
-      if (!desiredIds.has(id)) removeRoute(id);
-    });
+    clearRoute();
+    routeOverlay = {
+      id: order.id,
+      path: order.fullPath,
+      overlays: addRoute(map, TMap, {
+        path: order.fullPath,
+        color: ROUTE_COLOR,
+        lineWidth: 5,
+        lineOpacity: 1
+      })
+    };
   };
 
   const showActiveOrder = () => {
     const order = activeOrders[activeIndex];
     if (!order) {
-      syncRoutes([]);
+      syncRoute(null);
       buildings.update([]);
       vehiclePositions = [];
-      onChange();
+      onChange(null);
       return;
     }
 
-    syncRoutes([order]);
+    syncRoute(order);
     buildings.update([
       {
         id: `${order.id}:start`,
@@ -110,13 +99,14 @@ export function createOrderMapTracking({ TMap, map, onChange }) {
     ]);
     vehiclePositions = order.realtimePath.length > 1 ? [{
       id: order.id,
+      vehiclePlate: order.order.vehiclePlate,
       coordinate: order.coordinate,
       nextCoordinate: [
         order.coordinate[0] + order.coordinate[0] - order.realtimePath.at(-2)[0],
         order.coordinate[1] + order.coordinate[1] - order.realtimePath.at(-2)[1]
       ]
     }] : [];
-    onChange();
+    onChange(order.order);
   };
 
   const update = (orders) => {
@@ -158,7 +148,7 @@ export function createOrderMapTracking({ TMap, map, onChange }) {
     getVehiclePositions: () => vehiclePositions,
     cleanup() {
       window.clearInterval(rotationTimer);
-      clearRoutes();
+      clearRoute();
       buildings.cleanup();
       activeOrders = [];
       vehiclePositions = [];

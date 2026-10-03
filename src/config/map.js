@@ -30,6 +30,7 @@ export const BUILDING_PALETTES = {
 export const VEHICLE_CONFIG = {
   modelUrl: vehicleModelUrl,
   scale: 54,
+  labelOffset: 38,
   pitch: MAP_CONFIG.pitch,
   forwardOffset: Math.PI / 2
 };

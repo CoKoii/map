@@ -27,10 +27,17 @@ function createMap(TMap, element) {
   });
 }
 
-function loadScene({ TMap, map, boundary, canvas, overlays, onVehicleError }) {
+function loadScene({ TMap, map, boundary, canvas, overlays, onVehicleError, onActiveOrderChange }) {
   overlays.push(...addBoundaryLayers(map, TMap, boundary));
   let renderVehicles = () => {};
-  const orderTracking = createOrderMapTracking({ TMap, map, onChange: () => renderVehicles() });
+  const orderTracking = createOrderMapTracking({
+    TMap,
+    map,
+    onChange(order) {
+      onActiveOrderChange(order);
+      renderVehicles();
+    }
+  });
   const vehicleAnimation = loadVehicleAnimation(TMap, map, canvas, orderTracking.getVehiclePositions);
   renderVehicles = vehicleAnimation.render;
   vehicleAnimation.ready.catch(onVehicleError);
@@ -38,7 +45,6 @@ function loadScene({ TMap, map, boundary, canvas, overlays, onVehicleError }) {
   return {
     updateOrders(orders) {
       orderTracking.update(orders);
-      vehicleAnimation.render();
     },
     cleanup() {
       orderTracking.cleanup();
@@ -47,11 +53,7 @@ function loadScene({ TMap, map, boundary, canvas, overlays, onVehicleError }) {
   };
 }
 
-function getMapErrorMessage(error) {
-  return error.message;
-}
-
-export default function MapView({ orders }) {
+export default function MapView({ orders, onActiveOrderChange }) {
   const mapElement = useRef(null);
   const vehicleCanvas = useRef(null);
   const orderTrackingRef = useRef(null);
@@ -84,18 +86,19 @@ export default function MapView({ orders }) {
               boundary: boundaryData,
               canvas: vehicleCanvas.current,
               overlays,
-              onVehicleError: (error) => setMapState({ phase: 'error', message: error.message })
+              onVehicleError: (error) => setMapState({ phase: 'error', message: error.message }),
+              onActiveOrderChange
             });
             orderTrackingRef.current = orderTracking;
             orderTracking.updateOrders(ordersRef.current);
             if (cancelled) return;
             setMapState({ phase: 'ready', message: '地图已连接 · 订单实时定位与轨迹已接入' });
           } catch (error) {
-            if (!cancelled) setMapState({ phase: 'error', message: getMapErrorMessage(error) });
+            if (!cancelled) setMapState({ phase: 'error', message: error.message });
           }
         });
       } catch (error) {
-        if (!cancelled) setMapState({ phase: 'error', message: getMapErrorMessage(error) });
+        if (!cancelled) setMapState({ phase: 'error', message: error.message });
       }
     };
 

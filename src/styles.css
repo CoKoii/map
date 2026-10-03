@@ -95,9 +95,11 @@ h1 em { color: #f5d28b; font-style: normal; }
 .execution-grid span { color: #b5c0b8; font-size: 16px; }
 
 .tracking-panel { display: flex; flex-direction: column; }
-.tracking-meta { display: flex; justify-content: space-between; gap: 14px; min-width: 0; padding: 16px 20px 6px; color: #b5c0b8; font-size: 13px; white-space: nowrap; }
-.tracking-meta > span { overflow: hidden; text-overflow: ellipsis; }
-.tracking-meta > span:last-child { text-align: right; }
+.tracking-meta { display: grid; gap: 8px; min-width: 0; padding: 16px 20px 6px; color: #b5c0b8; font-size: 13px; }
+.tracking-order, .tracking-location { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.tracking-order > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tracking-location > span { min-width: 0; color: #c4ccc2; line-height: 1.45; overflow: visible; white-space: normal; overflow-wrap: anywhere; }
+.tracking-order > b { flex: 0 0 auto; color: #f2d58e; font-size: 12px; font-weight: 600; letter-spacing: .4px; }
 .tracking-steps { display: grid; align-content: center; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 12px; }
 .tracking-step { position: relative; display: grid; justify-items: center; gap: 9px; min-width: 0; color: #899a93; }
 .tracking-step::before { position: absolute; top: 13px; right: 50%; left: -50%; height: 1px; background: rgba(209, 192, 143, 0.28); content: ''; }

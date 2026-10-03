@@ -21,7 +21,7 @@ export function createOrderBuildings({ TMap, map }) {
     if (visuals.get(key) === visual) visuals.delete(key);
   };
 
-  const animate = (key, visual, target, duration, onComplete) => {
+  const animate = (key, visual, target, duration) => {
     cancelAnimation(visual);
     const token = visual.animationToken;
     const startScale = visual.scale;
@@ -37,7 +37,6 @@ export function createOrderBuildings({ TMap, map }) {
         return;
       }
       visual.frameId = null;
-      onComplete?.();
     };
     visual.frameId = window.requestAnimationFrame(tick);
   };

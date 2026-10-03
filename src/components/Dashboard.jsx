@@ -53,10 +53,6 @@ function displayNumber(value, fractionDigits = 0) {
 
 const TRACKING_STEPS = ['预约提交', '车辆到场', '交付确认', '运输中', '到场回执'];
 
-function getOrderTimestamp({ orderLog }) {
-  return orderLog.at(-1).createTime;
-}
-
 function getTrackingStage(order) {
   if (!order) return -1;
   const status = order.status;
@@ -211,16 +207,21 @@ function CitySlogan() {
   );
 }
 
-function TrackingPanel({ orders, loading, error }) {
-  const order = orders.reduce((latest, candidate) => (
-    !latest || getOrderTimestamp(candidate) > getOrderTimestamp(latest) ? candidate : latest
-  ), null);
+function TrackingPanel({ order, loading, error }) {
   const currentStep = getTrackingStage(order);
+  const locationText = order
+    ? `${order.communityProject} → ${order.realtimeTrack.endPoint.name}`
+    : loading ? '订单数据加载中' : error ? '订单数据暂不可用' : '暂无当前任务';
   return (
     <Panel title="清运任务追踪" meta="全流程可查 · 实时记录" className="tracking-panel">
       <div className="tracking-meta">
-        <span>{order?.orderNo || (loading ? '订单数据加载中' : error ? '订单数据暂不可用' : '暂无当前任务')}</span>
-        <span title={order?.communityProject}>{order?.communityProject || '预约收集点'} → 接收场所</span>
+        <div className="tracking-order">
+          <span>{order?.orderNo || (loading ? '订单数据加载中' : error ? '订单数据暂不可用' : '暂无当前任务')}</span>
+          {order && <b>{order.vehiclePlate}</b>}
+        </div>
+        <div className="tracking-location">
+          <span title={locationText}>{locationText}</span>
+        </div>
       </div>
       <div className="tracking-steps">
         {TRACKING_STEPS.map((step, index) => (
@@ -252,13 +253,13 @@ function ProcessBar() {
   );
 }
 
-export default function DashboardOverlay({ overview, orders, loading, error }) {
+export default function DashboardOverlay({ overview, activeOrder, loading, error }) {
   const regions = overview ? overview.regionCollection : [];
   return (
     <div className="dashboard-overlay">
       <StatStrip overview={overview?.overview} />
       <aside className="dashboard-rail dashboard-rail-left"><ServicePanel /><DistributionPanel regions={regions} loading={loading} error={error} /></aside>
-      <aside className="dashboard-rail dashboard-rail-right"><CitySlogan /><ExecutionPanel execution={overview?.execution} /><TrackingPanel orders={orders} loading={loading} error={error} /></aside>
+      <aside className="dashboard-rail dashboard-rail-right"><CitySlogan /><ExecutionPanel execution={overview?.execution} /><TrackingPanel order={activeOrder} loading={loading} error={error} /></aside>
       <ProcessBar />
     </div>
   );

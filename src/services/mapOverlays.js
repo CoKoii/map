@@ -1,4 +1,4 @@
-import { BUILDING_SPEC, INITIAL_BUILDING_SCALE } from '../config/map';
+import { BUILDING_SPEC, INITIAL_BUILDING_SCALE, MAP_CONFIG } from '../config/map';
 
 const PLACE_LABEL_HEIGHT = 28;
 const LABEL_CLEARANCE = 72;
@@ -80,12 +80,62 @@ function createTextLabelStyle(TMap, name) {
   });
 }
 
-export function addPlaceHighlight(map, TMap, place, location) {
+export function addPlaceHighlight(map, TMap, place, location, labelAnchor) {
+  const labelLocation = labelAnchor
+    ? getFootprintLabelPosition(map, TMap, labelAnchor.footprint, labelAnchor.height)
+    : getLabelPosition(map, TMap, location);
   return new TMap.MultiMarker({
     map,
     styles: { place: createTextLabelStyle(TMap, place.name) },
-    geometries: [{ id: `place-${place.id}`, position: getLabelPosition(map, TMap, location), styleId: 'place' }]
+    geometries: [{ id: `place-${place.id}`, position: labelLocation, styleId: 'place' }]
   });
+}
+
+const FACILITY_FOOTPRINT = { width: 0.011, depth: 0.0082, height: 4500 };
+
+function footprintPoint([longitude, latitude], [x, y]) {
+  return [longitude + x * FACILITY_FOOTPRINT.width, latitude + y * FACILITY_FOOTPRINT.depth];
+}
+
+function getFootprintLabelPosition(map, TMap, footprint, buildingHeight) {
+  const projected = footprint.map((point) => map.projectToContainer(toLatLng(TMap, point))).filter(Boolean);
+  if (!projected.length) return toLatLng(TMap, footprint[0]);
+  const left = Math.min(...projected.map(({ x }) => x));
+  const right = Math.max(...projected.map(({ x }) => x));
+  const top = Math.min(...projected.map(({ y }) => y));
+  const latitude = footprint[0][1] * Math.PI / 180;
+  const zoom = map.getZoom?.() ?? MAP_CONFIG.zoom;
+  const pitch = (map.getPitch?.() ?? MAP_CONFIG.pitch) * Math.PI / 180;
+  const metersPerPixel = Math.cos(latitude) * 2 * Math.PI * 6378137 / (256 * 2 ** zoom);
+  const roofHeightPixels = buildingHeight * Math.sin(pitch) / metersPerPixel;
+  const labelCenter = new TMap.Point((left + right) / 2, top - roofHeightPixels - 10 - PLACE_LABEL_HEIGHT / 2);
+  return map.unprojectFromContainer(labelCenter) || toLatLng(TMap, footprint[0]);
+}
+
+const FACILITY_MASSES = [
+  { id: 'main-hall', height: 1, points: [[-1.05, -0.5], [-0.16, -0.5], [-0.16, 0.58], [-1.05, 0.58]] },
+  { id: 'sorting-hall', height: 0.78, points: [[0.22, -0.82], [1.02, -0.82], [1.02, -0.12], [0.22, -0.12]] },
+  { id: 'transfer-hall', height: 0.62, points: [[0.24, 0.18], [1.02, 0.18], [1.02, 0.84], [0.24, 0.84]] },
+  { id: 'administration', height: 0.38, points: [[-0.88, 0.78], [-0.22, 0.78], [-0.22, 1.1], [-0.88, 1.1]] }
+];
+
+export function addDisposalFacilityBuildings(map, TMap, location, style) {
+  const footprint = [];
+  const geometries = FACILITY_MASSES.map(({ id, points }) => {
+    const coordinates = points.map((point) => {
+      const coordinate = footprintPoint(location, point);
+      footprint.push(coordinate);
+      return toLatLng(TMap, coordinate);
+    });
+    coordinates.push(coordinates[0]);
+    return { id, paths: coordinates, styleId: id };
+  });
+  const styles = Object.fromEntries(FACILITY_MASSES.map((mass) => [
+    mass.id,
+    buildingStyle(TMap, style, FACILITY_FOOTPRINT.height * mass.height)
+  ]));
+  const overlay = new TMap.MultiPolygon({ map, geometries, styles });
+  return { overlay, footprint, height: FACILITY_FOOTPRINT.height };
 }
 
 function buildingPath([longitude, latitude], spec) {

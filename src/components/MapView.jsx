@@ -3,6 +3,7 @@ import boundaryData from '../data/kunshan-boundary-gcj02.json';
 import { loadTencentMap } from '../services/tencentMap';
 import { MAP_CONFIG } from '../config/map';
 import { addBoundaryLayers } from '../services/mapOverlays';
+import { createFixedDisposalSites } from '../services/fixedDisposalSites';
 import { createOrderMapTracking } from '../services/orderMapTracking';
 import { loadVehicleAnimation } from '../services/vehicleAnimation';
 
@@ -29,6 +30,7 @@ function createMap(TMap, element) {
 
 function loadScene({ TMap, map, boundary, canvas, overlays, onVehicleError, onActiveOrderChange }) {
   overlays.push(...addBoundaryLayers(map, TMap, boundary));
+  const removeFixedDisposalSites = createFixedDisposalSites({ TMap, map });
   let renderVehicles = () => {};
   const orderTracking = createOrderMapTracking({
     TMap,
@@ -49,6 +51,7 @@ function loadScene({ TMap, map, boundary, canvas, overlays, onVehicleError, onAc
     cleanup() {
       orderTracking.cleanup();
       vehicleAnimation.cleanup();
+      removeFixedDisposalSites();
     }
   };
 }

@@ -27,6 +27,21 @@ export const BUILDING_PALETTES = {
   huaqiao: { fillColor: '#55c5d8', roofColor: '#a1edf2' }
 };
 
+export const FIXED_DISPOSAL_SITES = [
+  {
+    id: 'kunshan-recycling-center',
+    name: '昆山建筑垃圾资源化利用中心(高新区)',
+    coordinates: [120.910382, 31.452587],
+    style: BUILDING_PALETTES.recyclingCenter
+  },
+  {
+    id: 'kunshan-east-disposal-center',
+    name: '昆山东部处置中心(花桥)',
+    coordinates: [121.047823, 31.274948],
+    style: BUILDING_PALETTES.eastDisposalCenter
+  }
+];
+
 export const VEHICLE_CONFIG = {
   modelUrl: vehicleModelUrl,
   scale: 54,

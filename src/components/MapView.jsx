@@ -19,12 +19,12 @@ function createMap(TMap, element) {
     mapStyleId: MAP_CONFIG.style,
     showBuilding: true,
     showControl: false,
-    draggable: false,
-    scrollable: false,
-    touchZoomable: false,
-    pitchable: false,
-    rotatable: false,
-    doubleClickZoom: false
+    draggable: true,
+    scrollable: true,
+    touchZoomable: true,
+    pitchable: true,
+    rotatable: true,
+    doubleClickZoom: true
   });
 }
 

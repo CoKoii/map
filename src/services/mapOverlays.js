@@ -97,6 +97,8 @@ function footprintPoint([longitude, latitude], [x, y]) {
   return [longitude + x * FACILITY_FOOTPRINT.width, latitude + y * FACILITY_FOOTPRINT.depth];
 }
 
+const FACILITY_LABEL_GAP = 3;
+
 function getFootprintLabelPosition(map, TMap, footprint, buildingHeight) {
   const projected = footprint.map((point) => map.projectToContainer(toLatLng(TMap, point))).filter(Boolean);
   if (!projected.length) return toLatLng(TMap, footprint[0]);
@@ -108,7 +110,7 @@ function getFootprintLabelPosition(map, TMap, footprint, buildingHeight) {
   const pitch = (map.getPitch?.() ?? MAP_CONFIG.pitch) * Math.PI / 180;
   const metersPerPixel = Math.cos(latitude) * 2 * Math.PI * 6378137 / (256 * 2 ** zoom);
   const roofHeightPixels = buildingHeight * Math.sin(pitch) / metersPerPixel;
-  const labelCenter = new TMap.Point((left + right) / 2, top - roofHeightPixels - 10 - PLACE_LABEL_HEIGHT / 2);
+  const labelCenter = new TMap.Point((left + right) / 2, top - roofHeightPixels - FACILITY_LABEL_GAP - PLACE_LABEL_HEIGHT / 2);
   return map.unprojectFromContainer(labelCenter) || toLatLng(TMap, footprint[0]);
 }
 

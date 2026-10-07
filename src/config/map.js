@@ -1,10 +1,10 @@
 import vehicleModelUrl from '../assets/car.glb?url';
 
 export const MAP_CONFIG = {
-  center: [120.96, 31.34],
-  zoom: 11.3,
-  pitch: 40.5,
-  rotation: 100.7,
+  center: [120.95, 31.34],
+  zoom: 10.8,
+  pitch: 43,
+  rotation: 4.7,
   zooms: [9, 20],
   style: 'DARK'
 };

@@ -215,10 +215,10 @@ function TrackingPanel({ order, loading, error }) {
   return (
     <Panel title="清运任务追踪" meta="全流程可查 · 实时记录" className="tracking-panel">
       <div className="tracking-meta">
-        <div className="tracking-order">
-          <span>{order?.orderNo || (loading ? '订单数据加载中' : error ? '订单数据暂不可用' : '暂无当前任务')}</span>
-          {order && <b>{order.vehiclePlate}</b>}
-        </div>
+        {order && <div className="tracking-order">
+          <span>{order.orderNo}</span>
+          <b>{order.vehiclePlate}</b>
+        </div>}
         <div className="tracking-location">
           <span title={locationText}>{locationText}</span>
         </div>
